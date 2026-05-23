@@ -120,3 +120,121 @@ extension GitHubDirectTransportAttachmentTests {
         XCTAssertEqual(AttachmentUploader.sanitize("   "), "file.bin")
     }
 }
+
+extension GitHubDirectTransportAttachmentTests {
+
+    func test_empty_attachments_skips_branch_and_upload_calls() async throws {
+        var callCount = 0
+        URLProtocolStub.respond { req in
+            callCount += 1
+            XCTAssertEqual(req.url?.path, "/repos/octocat/feedback/issues",
+                           "only issues endpoint should be touched")
+            return (
+                HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!,
+                #"{"number":42}"#.data(using: .utf8)!
+            )
+        }
+        let transport = GitHubDirectTransport(owner: "octocat", repo: "feedback", token: "t", session: makeSession())
+        let report = FeedbackReport(type: .bug, title: "T", description: "D")
+        let n = try await transport.submit(report, deviceInfo: device())
+        XCTAssertEqual(n, 42)
+        XCTAssertEqual(callCount, 1)
+    }
+
+    func test_single_attachment_happy_path_returns_issue_number() async throws {
+        URLProtocolStub.enqueue([
+            { req in   // branch exists
+                XCTAssertEqual(req.url?.path, "/repos/octocat/feedback/branches/feedback-attachments")
+                return (
+                    HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                    Data()
+                )
+            },
+            { req in   // PUT contents
+                XCTAssertEqual(req.httpMethod, "PUT")
+                XCTAssertTrue(req.url?.path.contains("/contents/attachments/") ?? false)
+                return (
+                    HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!,
+                    #"{"content":{"download_url":"https://raw.githubusercontent.com/o/r/feedback-attachments/attachments/x/shot.png"}}"#.data(using: .utf8)!
+                )
+            },
+            { req in   // POST issue
+                XCTAssertEqual(req.url?.path, "/repos/octocat/feedback/issues")
+                let body = try! JSONSerialization.jsonObject(with: req.bodyData ?? Data()) as! [String: Any]
+                let bodyText = body["body"] as! String
+                XCTAssertTrue(bodyText.contains("<!-- attachments-v1 -->"))
+                XCTAssertTrue(bodyText.contains("https://raw.githubusercontent.com/o/r/feedback-attachments/attachments/x/shot.png"))
+                return (
+                    HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!,
+                    #"{"number":99}"#.data(using: .utf8)!
+                )
+            },
+        ])
+        let transport = GitHubDirectTransport(owner: "octocat", repo: "feedback", token: "t", session: makeSession())
+        let png = Data([0x89, 0x50, 0x4E, 0x47]) // not a valid PNG; preprocessor will fail
+        // Use a non-image to avoid running through ImagePreprocessor for this test.
+        let report = FeedbackReport(
+            type: .bug, title: "T", description: "D",
+            attachments: [
+                FeedbackAttachment(filename: "shot.png", mimeType: "text/plain", data: png)
+            ]
+        )
+        let n = try await transport.submit(report, deviceInfo: device())
+        XCTAssertEqual(n, 99)
+    }
+
+    func test_upload_failure_throws_attachmentUpload_and_skips_issue_create() async throws {
+        var sawIssueCall = false
+        URLProtocolStub.enqueue([
+            { req in   // branch check 200
+                return (
+                    HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                    Data()
+                )
+            },
+            { req in   // PUT 1 ok
+                return (
+                    HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!,
+                    #"{"content":{"download_url":"https://example.com/a.txt"}}"#.data(using: .utf8)!
+                )
+            },
+            { req in   // PUT 2 fails
+                return (
+                    HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!,
+                    Data()
+                )
+            },
+            { req in
+                sawIssueCall = true
+                return (
+                    HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!,
+                    Data()
+                )
+            },
+        ])
+        let transport = GitHubDirectTransport(owner: "octocat", repo: "feedback", token: "t", session: makeSession())
+        let report = FeedbackReport(
+            type: .bug, title: "T", description: "D",
+            attachments: [
+                FeedbackAttachment(filename: "a.txt", mimeType: "text/plain", data: Data([1])),
+                FeedbackAttachment(filename: "b.txt", mimeType: "text/plain", data: Data([2])),
+            ]
+        )
+        do {
+            _ = try await transport.submit(report, deviceInfo: device())
+            XCTFail("expected throw")
+        } catch FeedbackSubmissionError.attachmentUpload(let filename, _) {
+            XCTAssertEqual(filename, "b.txt")
+        } catch {
+            XCTFail("expected attachmentUpload, got \(error)")
+        }
+        XCTAssertFalse(sawIssueCall, "issue create must not run after upload failure")
+    }
+
+    private func device() -> DeviceInfo {
+        DeviceInfo(
+            appName: "App", appVersion: "1.0", buildNumber: "1",
+            model: "Mac", osName: "macOS", osVersion: "Version 15.1"
+        )
+    }
+}
