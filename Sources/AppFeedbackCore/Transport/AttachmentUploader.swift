@@ -47,6 +47,75 @@ struct AttachmentUploader {
         try await post(createURL, json: payload, expecting: 201)
     }
 
+    func upload(data: Data, sanitizedFilename: String, submissionID: String) async throws -> URL {
+        let path = "attachments/\(submissionID)/\(sanitizedFilename)"
+        let percentPath = path.split(separator: "/").map { percent(String($0)) }.joined(separator: "/")
+        let url = api("/repos/\(percent(owner))/\(percent(repo))/contents/\(percentPath)")
+
+        struct Payload: Encodable {
+            let message: String
+            let content: String
+            let branch: String
+        }
+        let payload = Payload(
+            message: "Add attachment for feedback submission \(submissionID)",
+            content: data.base64EncodedString(),
+            branch: branchName
+        )
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "PUT"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+        req.httpBody = try JSONEncoder().encode(payload)
+
+        let (responseData, resp) = try await session.data(for: req)
+        guard (resp as? HTTPURLResponse)?.statusCode == 201 else {
+            throw URLError(.badServerResponse)
+        }
+        struct Response: Decodable {
+            struct Content: Decodable { let download_url: String }
+            let content: Content
+        }
+        let parsed = try JSONDecoder().decode(Response.self, from: responseData)
+        guard let resultURL = URL(string: parsed.content.download_url) else {
+            throw URLError(.badServerResponse)
+        }
+        return resultURL
+    }
+
+    static func sanitize(_ raw: String) -> String {
+        let basename = (raw as NSString).lastPathComponent
+        var cleaned = basename
+            .replacingOccurrences(of: "\\", with: "")
+            .components(separatedBy: .controlCharacters).joined()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        if cleaned.isEmpty { cleaned = "file.bin" }
+        return cleaned
+    }
+
+    static func deduplicate(_ filenames: [String]) -> [String] {
+        var seen: [String: Int] = [:]
+        var result: [String] = []
+        for name in filenames {
+            if seen[name] == nil {
+                seen[name] = 1
+                result.append(name)
+            } else {
+                seen[name, default: 1] += 1
+                let n = seen[name]!
+                let stem = (name as NSString).deletingPathExtension
+                let ext = (name as NSString).pathExtension
+                let suffixed = ext.isEmpty ? "\(stem) (\(n))" : "\(stem) (\(n)).\(ext)"
+                result.append(suffixed)
+            }
+        }
+        return result
+    }
+
     // MARK: - HTTP helpers
 
     private func api(_ path: String) -> URL {
