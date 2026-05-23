@@ -1,5 +1,9 @@
 import Foundation
 
+/// Validates attachment collections against SDK limits: count (max 3),
+/// per-file size (max 5 MB), total size (max 10 MB), and MIME type allowlist.
+/// Throws ``FeedbackAttachmentError`` on any violation. Called by
+/// ``GitHubDirectTransport`` before any network I/O.
 enum FeedbackAttachmentValidator {
 
     static let maxCount = 3
