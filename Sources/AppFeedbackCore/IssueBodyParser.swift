@@ -1,0 +1,265 @@
+import Foundation
+import UniformTypeIdentifiers
+
+/// A single attachment entry extracted from the `<!-- attachments-v1 -->` block
+/// in a GitHub issue body.
+public struct ParsedAttachment: Sendable, Equatable {
+    public let filename: String
+    public let mimeType: String
+    public let url: URL
+    public let sizeBytes: Int?
+
+    public init(filename: String, mimeType: String, url: URL, sizeBytes: Int?) {
+        self.filename = filename
+        self.mimeType = mimeType
+        self.url = url
+        self.sizeBytes = sizeBytes
+    }
+}
+
+/// The structured fields extracted from an issue body by ``IssueBodyParser``.
+///
+/// All metadata fields are optional because the SDK accepts hand-written or
+/// legacy bodies that may be missing pieces. ``description`` is always
+/// non-`nil` (defaults to the empty string) so callers don't have to handle
+/// that case.
+public struct ParsedFeedbackBody: Sendable, Equatable {
+
+    /// Free-form body content above the device-information block.
+    /// Horizontal rules (`---`) and the device block itself are stripped.
+    public var description: String = ""
+
+    /// Value of the `App:` line inside the device-information block.
+    public var appName: String?
+
+    /// Value of the `App Version:` line.
+    public var appVersion: String?
+
+    /// Value of the `Device:` line.
+    public var device: String?
+
+    /// Value of the `<osName> Version:` line for any recognised OS
+    /// (`macOS`, `iOS`, `iPadOS`, `watchOS`, `tvOS`, `visionOS`, or the
+    /// generic `OS`).
+    public var osVersion: String?
+
+    /// Reply-to address from the `**Contact Email:**` block.
+    public var email: String?
+
+    /// Attachments extracted from the `<!-- attachments-v1 -->` block.
+    /// Empty when no block is present or the block contains no valid entries.
+    public var attachments: [ParsedAttachment] = []
+
+    /// Builds a parsed result with every field specified. Mostly useful for
+    /// tests; production code calls ``IssueBodyParser/parse(_:)``.
+    public init(
+        description: String = "",
+        appName: String? = nil,
+        appVersion: String? = nil,
+        device: String? = nil,
+        osVersion: String? = nil,
+        email: String? = nil,
+        attachments: [ParsedAttachment] = []
+    ) {
+        self.description = description
+        self.appName = appName
+        self.appVersion = appVersion
+        self.device = device
+        self.osVersion = osVersion
+        self.email = email
+        self.attachments = attachments
+    }
+}
+
+/// The inverse of ``IssueBodyFormatter``: pulls structured fields out of a
+/// GitHub issue body produced by the AppFeedback SDK (or a hand-written body
+/// following the same shape).
+///
+/// ```swift
+/// let parsed = IssueBodyParser.parse(githubIssue.body ?? "")
+/// parsed.appName       // "AcmeApp"
+/// parsed.device        // "iPhone15,2"
+/// parsed.osVersion     // "Version 18.2 (Build 22C150)"
+/// parsed.email         // "user@example.com"
+/// parsed.description   // body above the device block
+/// ```
+///
+/// This type is the single source of truth for parsing — the AppFeedback inbox
+/// app depends on it so the two ends of the wire contract can't drift.
+public enum IssueBodyParser {
+
+    /// Parses a raw GitHub issue body into structured fields.
+    ///
+    /// The parser is tolerant of variations seen in hand-written bodies — see
+    /// <doc:BodyFormat>'s *Resilience* section for the full list. If a field
+    /// can't be found, the corresponding property on the returned
+    /// ``ParsedFeedbackBody`` is `nil`.
+    ///
+    /// - Parameter raw: The full UTF-8 issue body as returned by GitHub.
+    /// - Returns: A ``ParsedFeedbackBody`` with whatever could be extracted.
+    public static func parse(_ raw: String) -> ParsedFeedbackBody {
+        var result = ParsedFeedbackBody()
+        var descLines: [String] = []
+        var inDevice = false
+        var expectEmail = false
+
+        for line in raw.components(separatedBy: "\n") {
+            // Strip bold markers anywhere on the line so `**Contact Email:** foo`
+            // and `**Device Information:**` both reduce to the same shape we
+            // match below. `trimmed` is used only for marker detection — the
+            // original `line` is what we append to the description, so removing
+            // `**` here can't corrupt user-formatted body text.
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+                .replacingOccurrences(of: "**", with: "")
+                .trimmingCharacters(in: .whitespaces)
+
+            if trimmed == BodyMarker.deviceHeader {
+                inDevice = true
+                continue
+            }
+
+            guard inDevice else {
+                descLines.append(line)
+                continue
+            }
+
+            if expectEmail {
+                if !trimmed.isEmpty && trimmed.contains("@") { result.email = trimmed }
+                expectEmail = false
+                continue
+            }
+
+            // `App Version:` must be checked before `App:` (the latter is a prefix of the former).
+            if let value = trimmed.value(after: BodyMarker.appVersionLabel) {
+                result.appVersion = value
+            } else if let value = trimmed.value(after: BodyMarker.appLabel) {
+                result.appName = value
+            } else if let value = trimmed.value(after: BodyMarker.deviceLabel) {
+                result.device = value
+            } else if Self.osVersionMatcher.firstMatch(
+                in: trimmed,
+                range: NSRange(trimmed.startIndex..., in: trimmed)
+            ) != nil {
+                result.osVersion = trimmed
+                    .components(separatedBy: ":")
+                    .dropFirst()
+                    .joined(separator: ":")
+                    .trimmingCharacters(in: .whitespaces)
+            } else if trimmed == BodyMarker.contactEmailLabel {
+                expectEmail = true
+            } else if let value = trimmed.value(after: BodyMarker.contactEmailLabel) {
+                if value.contains("@") { result.email = value } else { expectEmail = true }
+            }
+        }
+
+        result.description = descLines
+            .filter { $0.trimmingCharacters(in: .whitespaces) != BodyMarker.horizontalRule }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        result.attachments = parseAttachments(in: raw)
+        return result
+    }
+
+    // Compiled once at module load. NSRegularExpression is thread-safe for
+    // matching — only initialization needs synchronization.
+    private static let osVersionMatcher: NSRegularExpression = {
+        // swiftlint:disable:next force_try
+        try! NSRegularExpression(pattern: BodyMarker.osVersionPattern, options: [.caseInsensitive])
+    }()
+}
+
+private func parseAttachments(in raw: String) -> [ParsedAttachment] {
+    guard let openRange = raw.range(of: BodyMarker.attachmentsOpen) else { return [] }
+    let afterOpen = openRange.upperBound
+    let end = raw.range(of: BodyMarker.attachmentsClose, range: afterOpen..<raw.endIndex)?.lowerBound ?? raw.endIndex
+    let block = raw[afterOpen..<end]
+
+    var results: [ParsedAttachment] = []
+    for rawLine in block.split(separator: "\n", omittingEmptySubsequences: false) {
+        let line = rawLine.trimmingCharacters(in: .whitespaces)
+        guard let parsed = parseAttachmentLine(line) else { continue }
+        results.append(parsed)
+    }
+    return results
+}
+
+private func parseAttachmentLine(_ line: String) -> ParsedAttachment? {
+    // Image: ![name](url) optional " — mime, size"
+    // File:  [name](url)  optional " — mime, size"
+    let imagePrefix = "!["
+    let filePrefix = "["
+    var working = line
+    let isImage: Bool
+    if working.hasPrefix(imagePrefix) {
+        isImage = true
+        working.removeFirst(imagePrefix.count)
+    } else if working.hasPrefix(filePrefix) {
+        isImage = false
+        working.removeFirst(filePrefix.count)
+    } else {
+        return nil
+    }
+
+    guard let nameEnd = working.range(of: "](") else { return nil }
+    let filename = String(working[..<nameEnd.lowerBound])
+    let afterName = working[nameEnd.upperBound...]
+    guard let urlEnd = afterName.firstIndex(of: ")") else { return nil }
+    let urlString = String(afterName[..<urlEnd])
+    guard let url = URL(string: urlString) else { return nil }
+    let rest = afterName[afterName.index(after: urlEnd)...].trimmingCharacters(in: .whitespaces)
+
+    var mime: String?
+    var size: Int?
+    if rest.hasPrefix("—") {
+        let suffix = rest.dropFirst().trimmingCharacters(in: .whitespaces)
+        let parts = suffix.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+        if let m = parts.first { mime = m }
+        if parts.count > 1 { size = IssueBodyParser.parseHumanByteCount(parts[1]) }
+    }
+
+    let resolvedMime = mime ?? IssueBodyParser.inferMimeFromURL(url)
+    _ = isImage  // intentionally ignored — image-prefix vs file-prefix is just a serialization choice
+
+    return ParsedAttachment(filename: filename, mimeType: resolvedMime, url: url, sizeBytes: size)
+}
+
+extension IssueBodyParser {
+    static func parseHumanByteCount(_ s: String) -> Int? {
+        let parts = s.split(separator: " ", maxSplits: 1).map(String.init)
+        guard let numStr = parts.first, let num = Double(numStr) else { return nil }
+        let unit = parts.count > 1 ? parts[1].uppercased() : "B"
+        switch unit {
+        case "BYTES", "B": return Int(num)
+        case "KB":         return Int(num * 1_000)
+        case "MB":         return Int(num * 1_000_000)
+        case "GB":         return Int(num * 1_000_000_000)
+        default:           return Int(num)
+        }
+    }
+
+    static func inferMimeFromURL(_ url: URL) -> String {
+        let ext = url.pathExtension.lowercased()
+        if let type = UTType(filenameExtension: ext), let mime = type.preferredMIMEType {
+            return mime
+        }
+        // Fallback for extensions UTType doesn't map to a MIME type.
+        switch ext {
+        case "log", "txt", "text": return "text/plain"
+        case "json":               return "application/json"
+        case "xml":                return "application/xml"
+        case "csv":                return "text/csv"
+        default:                   return "application/octet-stream"
+        }
+    }
+}
+
+private extension String {
+    /// Returns the trimmed substring after `marker` if `self` starts with it,
+    /// otherwise `nil`. Replaces the older `dropPrefix` + `trimmingCharacters`
+    /// chain at the call sites in `IssueBodyParser`.
+    func value(after marker: String) -> String? {
+        guard hasPrefix(marker) else { return nil }
+        return String(dropFirst(marker.count)).trimmingCharacters(in: .whitespaces)
+    }
+}

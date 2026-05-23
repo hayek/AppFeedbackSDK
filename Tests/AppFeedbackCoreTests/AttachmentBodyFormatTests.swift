@@ -62,3 +62,89 @@ final class AttachmentBodyFormatTests: XCTestCase {
                           "attachments block must precede votes footer")
     }
 }
+
+final class AttachmentBodyParseTests: XCTestCase {
+
+    func test_absent_block_yields_empty_attachments() {
+        let body = "Just a description.\n\n---\n👍 Votes: 0"
+        let parsed = IssueBodyParser.parse(body)
+        XCTAssertTrue(parsed.attachments.isEmpty)
+    }
+
+    func test_parses_image_and_file_entries() {
+        let body = """
+        Desc
+
+        <!-- attachments-v1 -->
+        ## Attachments
+
+        ![shot.png](https://example.com/shot.png) — image/png, 312 KB
+
+        [log.txt](https://example.com/log.txt) — text/plain, 4.1 KB
+
+        <!-- /attachments-v1 -->
+
+        ---
+        👍 Votes: 0
+        """
+        let parsed = IssueBodyParser.parse(body)
+        XCTAssertEqual(parsed.attachments.count, 2)
+        XCTAssertEqual(parsed.attachments[0].filename, "shot.png")
+        XCTAssertEqual(parsed.attachments[0].mimeType, "image/png")
+        XCTAssertEqual(parsed.attachments[0].url.absoluteString, "https://example.com/shot.png")
+        XCTAssertEqual(parsed.attachments[1].filename, "log.txt")
+        XCTAssertEqual(parsed.attachments[1].mimeType, "text/plain")
+    }
+
+    func test_missing_suffix_falls_back_to_extension_inference() {
+        let body = """
+        <!-- attachments-v1 -->
+        ## Attachments
+
+        ![s.png](https://example.com/s.png)
+
+        [crash.log](https://example.com/crash.log)
+
+        <!-- /attachments-v1 -->
+        """
+        let parsed = IssueBodyParser.parse(body)
+        XCTAssertEqual(parsed.attachments.count, 2)
+        XCTAssertEqual(parsed.attachments[0].mimeType, "image/png")
+        XCTAssertEqual(parsed.attachments[1].mimeType, "text/plain")
+        XCTAssertNil(parsed.attachments[0].sizeBytes)
+    }
+
+    func test_malformed_line_is_skipped() {
+        let body = """
+        <!-- attachments-v1 -->
+        ## Attachments
+
+        not a link line
+        ![good.png](https://example.com/g.png) — image/png, 1 KB
+
+        <!-- /attachments-v1 -->
+        """
+        let parsed = IssueBodyParser.parse(body)
+        XCTAssertEqual(parsed.attachments.count, 1)
+        XCTAssertEqual(parsed.attachments[0].filename, "good.png")
+    }
+
+    func test_future_version_marker_is_ignored() {
+        let body = """
+        <!-- attachments-v2 -->
+        opaque future content
+        <!-- /attachments-v2 -->
+        """
+        let parsed = IssueBodyParser.parse(body)
+        XCTAssertTrue(parsed.attachments.isEmpty)
+    }
+
+    func test_missing_close_marker_parses_through_to_end() {
+        let body = """
+        <!-- attachments-v1 -->
+        ![a.png](https://example.com/a.png) — image/png, 1 KB
+        """
+        let parsed = IssueBodyParser.parse(body)
+        XCTAssertEqual(parsed.attachments.count, 1)
+    }
+}
