@@ -210,6 +210,7 @@ public struct FeedbackSheet: View {
                 return true
             }
             #endif
+            .background(PasteHandler { pasteImage() })
             footer
         }
     }
@@ -664,6 +665,28 @@ public struct FeedbackSheet: View {
             }
         }
     }
+    // MARK: - Paste (macOS)
+
+    private func pasteImage() {
+        #if os(macOS)
+        let pb = NSPasteboard.general
+        if let images = pb.readObjects(forClasses: [NSImage.self]) as? [NSImage], let img = images.first {
+            if let tiff = img.tiffRepresentation,
+               let rep = NSBitmapImageRep(data: tiff),
+               let png = rep.representation(using: .png, properties: [:]) {
+                let idx = pendingAttachments.count + 1
+                pendingAttachments.append(PendingAttachmentUI(
+                    filename: "pasted-image-\(idx).png",
+                    mimeType: "image/png",
+                    data: png,
+                    thumbnail: img
+                ))
+                revalidate()
+            }
+        }
+        #endif
+    }
+
     // MARK: - Drag-and-drop (macOS)
 
     #if os(macOS)
@@ -797,6 +820,36 @@ private struct PendingAttachmentTile: View {
         }
     }
 }
+
+#if os(macOS)
+private struct PasteHandler: NSViewRepresentable {
+    let onPaste: () -> Void
+    func makeNSView(context: Context) -> NSView { PasteCatcherView(onPaste: onPaste) }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+private final class PasteCatcherView: NSView {
+    let onPaste: () -> Void
+    init(onPaste: @escaping () -> Void) {
+        self.onPaste = onPaste
+        super.init(frame: .zero)
+    }
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
+    override var acceptsFirstResponder: Bool { true }
+    override func keyDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "v" {
+            onPaste()
+        } else {
+            super.keyDown(with: event)
+        }
+    }
+}
+#else
+private struct PasteHandler: View {
+    let onPaste: () -> Void
+    var body: some View { Color.clear }
+}
+#endif
 
 extension Image {
     init(platformImage: PlatformImage) {
