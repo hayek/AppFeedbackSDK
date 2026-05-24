@@ -1,5 +1,6 @@
 import SwiftUI
 import AppFeedbackCore
+import UniformTypeIdentifiers
 
 #if os(macOS)
 import AppKit
@@ -59,6 +60,7 @@ public struct FeedbackSheet: View {
     @State private var pendingAttachments: [PendingAttachmentUI] = []
     @State private var attachmentError: String?
     @State private var isDragTargeted: Bool = false
+    @State private var showFileImporter = false
     @State private var selectedType: FeedbackType = .bug
 
     @State private var isSubmitting = false
@@ -195,6 +197,7 @@ public struct FeedbackSheet: View {
                     titleCard
                     descriptionCard
                     emailCard
+                    attachmentsCard
                     privacyNotice
                 }
                 .padding(.horizontal, 24)
@@ -409,6 +412,56 @@ public struct FeedbackSheet: View {
         }
     }
 
+    private var attachmentsCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                sectionLabel(theme.copy.attachmentsLabel, icon: "paperclip")
+                Spacer()
+                Button {
+                    showFileImporter = true
+                } label: {
+                    Label("Add", systemImage: "plus")
+                        .font(.system(size: 12, weight: .semibold))
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(pendingAttachments.count >= 3)
+            }
+            if !pendingAttachments.isEmpty {
+                attachmentStrip
+            }
+            if let attachmentError {
+                Text(attachmentError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+        .fileImporter(
+            isPresented: $showFileImporter,
+            allowedContentTypes: [.png, .jpeg, .heic, .gif, .plainText, .json, .pdf],
+            allowsMultipleSelection: true
+        ) { result in
+            if case .success(let urls) = result {
+                ingest(urls: urls)
+            }
+        }
+    }
+
+    private var attachmentStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(pendingAttachments) { att in
+                    PendingAttachmentTile(attachment: att, onRemove: {
+                        pendingAttachments.removeAll { $0.id == att.id }
+                        revalidate()
+                    })
+                }
+            }
+        }
+        .frame(height: 64)
+    }
+
     private var privacyNotice: some View {
         HStack(spacing: 8) {
             Image(systemName: "desktopcomputer.and.macbook")
@@ -467,7 +520,7 @@ public struct FeedbackSheet: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .keyboardShortcut(.return, modifiers: .command)
-                .disabled(isSubmitting)
+                .disabled(isSubmitting || attachmentError != nil)
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 14)
@@ -574,11 +627,15 @@ public struct FeedbackSheet: View {
         }
         showValidationError = false
 
+        let modeled = pendingAttachments.map {
+            FeedbackAttachment(filename: $0.filename, mimeType: $0.mimeType, data: $0.data)
+        }
         let report = FeedbackReport(
             type: selectedType,
             title: title,
             description: description,
-            contactEmail: contactEmail.isEmpty ? nil : contactEmail
+            contactEmail: contactEmail.isEmpty ? nil : contactEmail,
+            attachments: modeled
         )
 
         Task { @MainActor in
@@ -601,6 +658,59 @@ public struct FeedbackSheet: View {
             }
         }
     }
+    // MARK: - Attachment helpers
+
+    private func ingest(urls: [URL]) {
+        for url in urls {
+            guard pendingAttachments.count < 3 else { break }
+            guard url.startAccessingSecurityScopedResource() else { continue }
+            defer { url.stopAccessingSecurityScopedResource() }
+            guard let data = try? Data(contentsOf: url) else { continue }
+            let mime = mimeType(for: url)
+            let thumb: PlatformImage? = mime.hasPrefix("image/") ? PlatformImage(data: data) : nil
+            pendingAttachments.append(PendingAttachmentUI(
+                filename: url.lastPathComponent,
+                mimeType: mime,
+                data: data,
+                thumbnail: thumb
+            ))
+        }
+        revalidate()
+    }
+
+    private func revalidate() {
+        let modeled = pendingAttachments.map {
+            FeedbackAttachment(filename: $0.filename, mimeType: $0.mimeType, data: $0.data)
+        }
+        do {
+            try FeedbackAttachmentValidator.validate(modeled)
+            attachmentError = nil
+        } catch let err as FeedbackAttachmentError {
+            attachmentError = humanMessage(for: err)
+        } catch {
+            attachmentError = "Attachment error: \(error.localizedDescription)"
+        }
+    }
+
+    private func mimeType(for url: URL) -> String {
+        if let type = UTType(filenameExtension: url.pathExtension.lowercased()),
+           let mime = type.preferredMIMEType {
+            return mime
+        }
+        return "application/octet-stream"
+    }
+
+    private func humanMessage(for error: FeedbackAttachmentError) -> String {
+        switch error {
+        case .tooManyAttachments(let limit, _): return "At most \(limit) attachments."
+        case .fileTooLarge(let name, _, let limit):
+            return "\(name) exceeds \(ByteCountFormatter.string(fromByteCount: Int64(limit), countStyle: .file))."
+        case .totalSizeTooLarge(_, let limit):
+            return "Total exceeds \(ByteCountFormatter.string(fromByteCount: Int64(limit), countStyle: .file))."
+        case .unsupportedMimeType(let name, _): return "\(name): unsupported type."
+        case .imageProcessingFailed(let name): return "\(name) could not be processed."
+        }
+    }
 }
 
 struct PendingAttachmentUI: Identifiable, Equatable {
@@ -611,4 +721,60 @@ struct PendingAttachmentUI: Identifiable, Equatable {
     let thumbnail: PlatformImage?
 
     static func == (lhs: PendingAttachmentUI, rhs: PendingAttachmentUI) -> Bool { lhs.id == rhs.id }
+}
+
+private struct PendingAttachmentTile: View {
+    let attachment: PendingAttachmentUI
+    let onRemove: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if let thumb = attachment.thumbnail {
+                    Image(platformImage: thumb)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    VStack(spacing: 2) {
+                        Image(systemName: icon)
+                            .font(.system(size: 16, weight: .semibold))
+                        Text(attachment.filename)
+                            .font(.system(size: 8))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .padding(.horizontal, 4)
+                }
+            }
+            .frame(width: 56, height: 56)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.15)))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white, .black.opacity(0.6))
+            }
+            .buttonStyle(.plain)
+            .offset(x: 4, y: -4)
+        }
+    }
+
+    private var icon: String {
+        switch attachment.mimeType {
+        case "application/pdf": return "doc.fill"
+        case "application/json": return "curlybraces"
+        default: return "doc.text"
+        }
+    }
+}
+
+extension Image {
+    init(platformImage: PlatformImage) {
+        #if os(macOS)
+        self.init(nsImage: platformImage)
+        #else
+        self.init(uiImage: platformImage)
+        #endif
+    }
 }

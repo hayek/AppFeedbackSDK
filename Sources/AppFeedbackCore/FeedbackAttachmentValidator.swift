@@ -4,7 +4,7 @@ import Foundation
 /// per-file size (max 5 MB), total size (max 10 MB), and MIME type allowlist.
 /// Throws ``FeedbackAttachmentError`` on any violation. Called by
 /// ``GitHubDirectTransport`` before any network I/O.
-enum FeedbackAttachmentValidator {
+public enum FeedbackAttachmentValidator {
 
     static let maxCount = 3
     static let maxFileBytes = 5 * 1024 * 1024
@@ -19,7 +19,7 @@ enum FeedbackAttachmentValidator {
         "application/pdf",
     ]
 
-    static func validate(_ attachments: [FeedbackAttachment]) throws {
+    public static func validate(_ attachments: [FeedbackAttachment]) throws {
         if attachments.count > maxCount {
             throw FeedbackAttachmentError.tooManyAttachments(limit: maxCount, got: attachments.count)
         }
