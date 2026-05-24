@@ -37,9 +37,11 @@ enum ImagePreprocessor {
         guard let dest = CGImageDestinationCreateWithData(output as CFMutableData, type.identifier as CFString, 1, nil) else {
             throw FeedbackAttachmentError.imageProcessingFailed(filename: attachment.filename)
         }
-        // Pass options dict without metadata keys — drops all source metadata (EXIF, GPS, iTXt, etc.).
+        // Explicit GPS/XMP exclusion keys ensure ImageIO strips source metadata before writing.
         let options: [CFString: Any] = [
             kCGImageDestinationLossyCompressionQuality: 0.85,
+            kCGImageMetadataShouldExcludeGPS: true,
+            kCGImageMetadataShouldExcludeXMP: true,
         ]
         CGImageDestinationAddImageFromSource(dest, source, 0, options as CFDictionary)
         guard CGImageDestinationFinalize(dest) else {

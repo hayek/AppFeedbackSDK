@@ -1,6 +1,8 @@
 // Tests/AppFeedbackCoreTests/ImagePreprocessorTests.swift
 import XCTest
 import ImageIO
+import CoreGraphics
+import UniformTypeIdentifiers
 @testable import AppFeedbackCore
 
 final class ImagePreprocessorTests: XCTestCase {
@@ -15,26 +17,97 @@ final class ImagePreprocessorTests: XCTestCase {
         return (CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any]) ?? [:]
     }
 
+    /// Creates a minimal 1×1 CGImage (red pixel).
+    private func makeRedPixelImage() -> CGImage {
+        var pixel: UInt32 = 0xFF0000FF  // RGBA red, full alpha
+        let data = Data(bytes: &pixel, count: 4)
+        let provider = CGDataProvider(data: data as CFData)!
+        return CGImage(
+            width: 1, height: 1,
+            bitsPerComponent: 8, bitsPerPixel: 32,
+            bytesPerRow: 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+            provider: provider,
+            decode: nil, shouldInterpolate: false,
+            intent: .defaultIntent
+        )!
+    }
+
+    /// Builds a `CGImageMetadata` container with a GPS block (37.7749°N, 122.4194°W).
+    private func makeGPSMetadata() -> CGMutableImageMetadata {
+        let meta = CGImageMetadataCreateMutable()
+
+        func set(_ path: CFString, _ value: CFTypeRef) {
+            CGImageMetadataSetValueWithPath(meta, nil, path, value)
+        }
+
+        // Use the XMP-exif GPS paths that ImageIO understands.
+        set("exif:GPSLatitudeRef" as CFString,  "N" as CFString)
+        set("exif:GPSLatitude" as CFString,     "37,46.494000N" as CFString)
+        set("exif:GPSLongitudeRef" as CFString, "W" as CFString)
+        set("exif:GPSLongitude" as CFString,    "122,25.164000W" as CFString)
+
+        return meta
+    }
+
+    /// Returns JPEG bytes for a 1×1 red pixel with embedded GPS metadata.
+    private func makeJPEGWithGPS() -> Data {
+        let output = NSMutableData()
+        let dest = CGImageDestinationCreateWithData(
+            output as CFMutableData,
+            UTType.jpeg.identifier as CFString,
+            1, nil
+        )!
+        let imageOptions: [CFString: Any] = [
+            kCGImageDestinationLossyCompressionQuality: 0.85,
+        ]
+        CGImageDestinationAddImageAndMetadata(
+            dest, makeRedPixelImage(), makeGPSMetadata(), imageOptions as CFDictionary
+        )
+        CGImageDestinationFinalize(dest)
+        return output as Data
+    }
+
+    /// Returns HEIC bytes for a 1×1 red pixel with embedded GPS metadata.
+    private func makeHEICWithGPS() -> Data {
+        let output = NSMutableData()
+        let dest = CGImageDestinationCreateWithData(
+            output as CFMutableData,
+            UTType.heic.identifier as CFString,
+            1, nil
+        )!
+        let imageOptions: [CFString: Any] = [
+            kCGImageDestinationLossyCompressionQuality: 0.85,
+        ]
+        CGImageDestinationAddImageAndMetadata(
+            dest, makeRedPixelImage(), makeGPSMetadata(), imageOptions as CFDictionary
+        )
+        CGImageDestinationFinalize(dest)
+        return output as Data
+    }
+
     func test_jpeg_input_emits_jpeg_output_without_gps() throws {
-        let input = FeedbackAttachment(filename: "in.jpg", mimeType: "image/jpeg", data: fixture("sample.jpg"))
+        let input = FeedbackAttachment(filename: "in.jpg", mimeType: "image/jpeg", data: makeJPEGWithGPS())
+        // Sanity-check the fixture has GPS so the strip is actually exercised.
+        let beforeProps = metadataDict(input.data)
+        XCTAssertNotNil(beforeProps["{GPS}"], "test fixture must have GPS for the strip-test to be meaningful")
         let out = try ImagePreprocessor.process(input)
         XCTAssertEqual(out.mimeType, "image/jpeg")
         XCTAssertEqual(out.filename, "in.jpg")
-        let props = metadataDict(out.data)
-        // exiftool not available during fixture generation — fixtures have no GPS to strip,
-        // but the assertion still holds: after processing, GPS key must be absent.
-        XCTAssertNil(props["{GPS}"], "GPS metadata should be stripped")
+        let afterProps = metadataDict(out.data)
+        XCTAssertNil(afterProps["{GPS}"], "GPS metadata should be stripped")
     }
 
     func test_heic_input_transcodes_to_jpeg_and_renames_extension() throws {
-        let input = FeedbackAttachment(filename: "shot.heic", mimeType: "image/heic", data: fixture("sample.heic"))
+        let input = FeedbackAttachment(filename: "shot.heic", mimeType: "image/heic", data: makeHEICWithGPS())
+        let beforeProps = metadataDict(input.data)
+        XCTAssertNotNil(beforeProps["{GPS}"], "test fixture must have GPS for the strip-test to be meaningful")
         let out = try ImagePreprocessor.process(input)
         XCTAssertEqual(out.mimeType, "image/jpeg")
         XCTAssertEqual(out.filename, "shot.jpg")
-        let props = metadataDict(out.data)
-        // exiftool not available during fixture generation — fixtures have no GPS to strip,
-        // but the assertion still holds: after processing, GPS key must be absent.
-        XCTAssertNil(props["{GPS}"], "GPS metadata should be stripped")
+        let afterProps = metadataDict(out.data)
+        XCTAssertNil(afterProps["{GPS}"], "GPS metadata should be stripped")
     }
 
     func test_png_input_emits_png_output() throws {
