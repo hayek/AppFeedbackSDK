@@ -204,6 +204,12 @@ public struct FeedbackSheet: View {
                 .padding(.top, 24)
                 .padding(.bottom, 28)
             }
+            #if os(macOS)
+            .onDrop(of: [.fileURL], isTargeted: $isDragTargeted) { providers in
+                handleDrop(providers: providers)
+                return true
+            }
+            #endif
             footer
         }
     }
@@ -658,6 +664,29 @@ public struct FeedbackSheet: View {
             }
         }
     }
+    // MARK: - Drag-and-drop (macOS)
+
+    #if os(macOS)
+    private func handleDrop(providers: [NSItemProvider]) {
+        var urls: [URL] = []
+        let group = DispatchGroup()
+        for p in providers {
+            group.enter()
+            p.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
+                    urls.append(url)
+                } else if let url = item as? URL {
+                    urls.append(url)
+                }
+                group.leave()
+            }
+        }
+        group.notify(queue: .main) {
+            ingest(urls: urls)
+        }
+    }
+    #endif
+
     // MARK: - Attachment helpers
 
     private func ingest(urls: [URL]) {
