@@ -691,21 +691,21 @@ public struct FeedbackSheet: View {
 
     #if os(macOS)
     private func handleDrop(providers: [NSItemProvider]) {
-        var urls: [URL] = []
+        let collector = URLCollector()
         let group = DispatchGroup()
         for p in providers {
             group.enter()
             p.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
                 if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
-                    urls.append(url)
+                    collector.append(url)
                 } else if let url = item as? URL {
-                    urls.append(url)
+                    collector.append(url)
                 }
                 group.leave()
             }
         }
-        group.notify(queue: .main) {
-            ingest(urls: urls)
+        group.notify(queue: .main) { [collector] in
+            ingest(urls: collector.urls)
         }
     }
     #endif
@@ -822,6 +822,19 @@ private struct PendingAttachmentTile: View {
 }
 
 #if os(macOS)
+private final class URLCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _urls: [URL] = []
+    var urls: [URL] {
+        lock.lock(); defer { lock.unlock() }
+        return _urls
+    }
+    func append(_ url: URL) {
+        lock.lock(); defer { lock.unlock() }
+        _urls.append(url)
+    }
+}
+
 private struct PasteHandler: NSViewRepresentable {
     let onPaste: () -> Void
     func makeNSView(context: Context) -> NSView { PasteCatcherView(onPaste: onPaste) }
