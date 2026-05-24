@@ -98,19 +98,27 @@ struct AttachmentUploader {
     }
 
     static func deduplicate(_ filenames: [String]) -> [String] {
-        var seen: [String: Int] = [:]
+        var counts: [String: Int] = [:]
+        var used: Set<String> = []
         var result: [String] = []
         for name in filenames {
-            if seen[name] == nil {
-                seen[name] = 1
-                result.append(name)
+            var candidate = name
+            if counts[name] == nil {
+                counts[name] = 1
+                used.insert(candidate)
+                result.append(candidate)
             } else {
-                seen[name, default: 1] += 1
-                let n = seen[name]!
-                let stem = (name as NSString).deletingPathExtension
-                let ext = (name as NSString).pathExtension
-                let suffixed = ext.isEmpty ? "\(stem) (\(n))" : "\(stem) (\(n)).\(ext)"
-                result.append(suffixed)
+                var n = (counts[name] ?? 0) + 1
+                while true {
+                    let stem = (name as NSString).deletingPathExtension
+                    let ext = (name as NSString).pathExtension
+                    candidate = ext.isEmpty ? "\(stem) (\(n))" : "\(stem) (\(n)).\(ext)"
+                    if !used.contains(candidate) { break }
+                    n += 1
+                }
+                counts[name] = n
+                used.insert(candidate)
+                result.append(candidate)
             }
         }
         return result

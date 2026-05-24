@@ -7,6 +7,9 @@ public struct ParsedAttachment: Sendable, Equatable {
     public let filename: String
     public let mimeType: String
     public let url: URL
+    /// Approximate file size, derived from the human-formatted suffix in the
+    /// body (e.g. "312 KB" → 312_000). Round-trips lossy by design — the
+    /// canonical byte count lives in the downloaded file's size on disk.
     public let sizeBytes: Int?
 
     public init(filename: String, mimeType: String, url: URL, sizeBytes: Int?) {
@@ -190,12 +193,9 @@ private func parseAttachmentLine(_ line: String) -> ParsedAttachment? {
     let imagePrefix = "!["
     let filePrefix = "["
     var working = line
-    let isImage: Bool
     if working.hasPrefix(imagePrefix) {
-        isImage = true
         working.removeFirst(imagePrefix.count)
     } else if working.hasPrefix(filePrefix) {
-        isImage = false
         working.removeFirst(filePrefix.count)
     } else {
         return nil
@@ -219,7 +219,6 @@ private func parseAttachmentLine(_ line: String) -> ParsedAttachment? {
     }
 
     let resolvedMime = mime ?? IssueBodyParser.inferMimeFromURL(url)
-    _ = isImage  // intentionally ignored — image-prefix vs file-prefix is just a serialization choice
 
     return ParsedAttachment(filename: filename, mimeType: resolvedMime, url: url, sizeBytes: size)
 }
@@ -243,7 +242,8 @@ extension IssueBodyParser {
         if let type = UTType(filenameExtension: ext), let mime = type.preferredMIMEType {
             return mime
         }
-        // Fallback for extensions UTType doesn't map to a MIME type.
+        // Wider than the SDK upload allowlist by design — the parser tolerates
+        // hand-written or legacy bodies, while the writer only emits allowlisted types.
         switch ext {
         case "log", "txt", "text": return "text/plain"
         case "json":               return "application/json"

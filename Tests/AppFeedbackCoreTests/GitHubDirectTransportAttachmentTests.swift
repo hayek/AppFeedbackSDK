@@ -113,6 +113,12 @@ extension GitHubDirectTransportAttachmentTests {
         XCTAssertEqual(deduped, ["shot.png", "shot (2).png", "shot (3).png"])
     }
 
+    func test_deduplicate_handles_pre_existing_suffix_in_input() {
+        let inputs = ["a.png", "a (2).png", "a.png"]
+        let deduped = AttachmentUploader.deduplicate(inputs)
+        XCTAssertEqual(deduped, ["a.png", "a (2).png", "a (3).png"])
+    }
+
     func test_filename_sanitization_strips_path_and_bad_chars() {
         XCTAssertEqual(AttachmentUploader.sanitize("../etc/passwd"), "passwd")
         XCTAssertEqual(AttachmentUploader.sanitize("a/b/c.png"), "c.png")
