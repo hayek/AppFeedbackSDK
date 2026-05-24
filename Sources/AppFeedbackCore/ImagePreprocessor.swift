@@ -6,9 +6,9 @@ import UniformTypeIdentifiers
 /// Strips metadata (EXIF/GPS) and transcodes HEIC→JPEG before upload.
 ///
 /// Cross-platform — no `#if`s; ImageIO is on every Apple platform.
-enum ImagePreprocessor {
+public enum ImagePreprocessor {
 
-    static func process(_ attachment: FeedbackAttachment) throws -> FeedbackAttachment {
+    public static func process(_ attachment: FeedbackAttachment) throws -> FeedbackAttachment {
         switch attachment.mimeType {
         case "image/heic":
             return try transcode(attachment, to: UTType.jpeg, mime: "image/jpeg", swappingExtensionTo: "jpg")
