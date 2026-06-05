@@ -19,9 +19,12 @@ enum BodyMarker {
     static let attachmentsClose = "<!-- /attachments-v1 -->"
     static let attachmentsHeader = "## Attachments"
 
-    /// OS names recognised in the `<osName> Version:` line by both
-    /// ``DeviceInfo/runtimeOSName()`` and ``IssueBodyParser/parse(_:)``.
-    static let recognisedOSNames = ["OS", "macOS", "iOS", "iPadOS", "watchOS", "tvOS", "visionOS"]
+    /// OS names recognised in the `<osName> Version:` line, written by
+    /// ``DeviceInfo/renderForIssueBody()`` and read by ``IssueBodyParser/parse(_:)``.
+    static let recognisedOSNames = [
+        "OS", "macOS", "iOS", "iPadOS", "watchOS", "tvOS", "visionOS",
+        "Android", "Windows", "Linux", "Web", "ChromeOS",
+    ]
 
     /// Regex that matches a line starting with any `recognisedOSNames` entry
     /// followed by ` Version:`. Used by the parser to extract the OS version.

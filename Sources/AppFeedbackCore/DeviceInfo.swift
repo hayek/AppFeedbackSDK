@@ -48,8 +48,11 @@ public struct DeviceInfo: Sendable, Equatable, Hashable {
     /// `utsname.machine` identifier.
     public let model: String
 
-    /// Human-readable platform name. One of:
-    /// `"macOS"`, `"iOS"`, `"iPadOS"`, `"watchOS"`, `"tvOS"`, `"visionOS"`.
+    /// Human-readable platform name. Apple platforms use one of `"macOS"`,
+    /// `"iOS"`, `"iPadOS"`, `"watchOS"`, `"tvOS"`, `"visionOS"`; other platforms
+    /// use `"Android"`, `"Windows"`, `"Linux"`, `"Web"`, or `"ChromeOS"` (the
+    /// generic `"OS"` is also accepted). These are the names the inbox parser
+    /// recognises for the OS column.
     ///
     /// On iOS, ``current(appName:)`` returns `"iOS"` even on iPad — pass an
     /// explicit `osName` here if you need to distinguish iPadOS in the inbox.

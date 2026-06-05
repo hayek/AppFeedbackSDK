@@ -42,8 +42,8 @@ public struct ParsedFeedbackBody: Sendable, Equatable {
     public var device: String?
 
     /// Value of the `<osName> Version:` line for any recognised OS
-    /// (`macOS`, `iOS`, `iPadOS`, `watchOS`, `tvOS`, `visionOS`, or the
-    /// generic `OS`).
+    /// (`macOS`, `iOS`, `iPadOS`, `watchOS`, `tvOS`, `visionOS`, `Android`,
+    /// `Windows`, `Linux`, `Web`, `ChromeOS`, or the generic `OS`).
     public var osVersion: String?
 
     /// Reply-to address from the `**Contact Email:**` block.
