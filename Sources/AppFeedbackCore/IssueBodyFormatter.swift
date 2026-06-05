@@ -75,7 +75,7 @@ public enum IssueBodyFormatter {
             body += "\n\n\(BodyMarker.attachmentsOpen)\n\(BodyMarker.attachmentsHeader)\n"
             for a in uploaded {
                 let prefix = a.mimeType.hasPrefix("image/") ? "!" : ""
-                let size = ByteCountFormatter.string(fromByteCount: Int64(a.sizeBytes), countStyle: .file)
+                let size = DeterministicByteCount.string(a.sizeBytes)
                 body += "\n\(prefix)[\(a.filename)](\(a.url.absoluteString)) — \(a.mimeType), \(size)\n"
             }
             body += "\n\(BodyMarker.attachmentsClose)"
