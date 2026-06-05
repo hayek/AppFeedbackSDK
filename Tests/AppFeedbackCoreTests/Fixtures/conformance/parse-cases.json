@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "legacy-macos-with-email",
+      "body": "The export button does nothing on macOS 15.\n\n---\n**Device Information:**\nApp: Usage for Claude\nApp Version: 3.4.1 (980)\nDevice: Mac15,11\nmacOS Version: Version 15.1 (Build 24B83)\n\n**Contact Email:**\nbeta@example.com\n\n---\n👍 Votes: 0",
+      "expected": { "description": "The export button does nothing on macOS 15.", "appName": "Usage for Claude", "appVersion": "3.4.1 (980)", "device": "Mac15,11", "osVersion": "Version 15.1 (Build 24B83)", "email": "beta@example.com", "attachments": [] }
+    },
+    {
+      "name": "android-no-email",
+      "body": "Tapping save does nothing.\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 2.0 (200)\nDevice: Pixel 8\nAndroid Version: 14\n\n---\n👍 Votes: 0",
+      "expected": { "description": "Tapping save does nothing.", "appName": "Acme", "appVersion": "2.0 (200)", "device": "Pixel 8", "osVersion": "14", "email": null, "attachments": [] }
+    },
+    {
+      "name": "web-inline-email",
+      "body": "Layout breaks at 320px.\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 3.0 (300)\nDevice: Desktop\nWeb Version: Chrome 120 on Windows\n**Contact Email:** dev@example.com",
+      "expected": { "description": "Layout breaks at 320px.", "appName": "Acme", "appVersion": "3.0 (300)", "device": "Desktop", "osVersion": "Chrome 120 on Windows", "email": "dev@example.com", "attachments": [] }
+    },
+    {
+      "name": "macos-with-attachments",
+      "body": "Has a rendering bug.\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 1.0 (1)\nDevice: Mac\nmacOS Version: Version 15.1\n\n<!-- attachments-v1 -->\n## Attachments\n\n![shot.png](https://example.com/shot.png) — image/png, 312 KB\n\n[log.txt](https://example.com/log.txt) — text/plain, 4.1 KB\n\n<!-- /attachments-v1 -->\n\n---\n👍 Votes: 0",
+      "expected": { "description": "Has a rendering bug.", "appName": "Acme", "appVersion": "1.0 (1)", "device": "Mac", "osVersion": "Version 15.1", "email": null, "attachments": [ { "filename": "shot.png", "mimeType": "image/png", "url": "https://example.com/shot.png", "sizeBytes": 312000 }, { "filename": "log.txt", "mimeType": "text/plain", "url": "https://example.com/log.txt", "sizeBytes": 4100 } ] }
+    }
+  ]
+}

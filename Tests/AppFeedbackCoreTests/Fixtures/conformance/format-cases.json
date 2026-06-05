@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "bug-minimal-ios",
+      "report": { "type": "bug", "title": "Crash on launch", "description": "It crashed on startup.", "contactEmail": null, "extraFields": {} },
+      "deviceInfo": { "appName": "Acme", "appVersion": "1.2.3", "buildNumber": "456", "model": "iPhone15,2", "osName": "iOS", "osVersion": "Version 18.2 (Build 22C150)" },
+      "uploaded": [],
+      "expectedBody": "It crashed on startup.\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 1.2.3 (456)\nDevice: iPhone15,2\niOS Version: Version 18.2 (Build 22C150)\n\n---\n👍 Votes: 0",
+      "expectedLabels": ["bug", "user-submitted"]
+    },
+    {
+      "name": "feature-with-email-android",
+      "report": { "type": "feature-request", "title": "Dark mode", "description": "Please add dark mode.", "contactEmail": "user@example.com", "extraFields": {} },
+      "deviceInfo": { "appName": "Acme", "appVersion": "2.0", "buildNumber": "200", "model": "Pixel 8", "osName": "Android", "osVersion": "14" },
+      "uploaded": [],
+      "expectedBody": "Please add dark mode.\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 2.0 (200)\nDevice: Pixel 8\nAndroid Version: 14\n\n**Contact Email:**\nuser@example.com\n\n---\n👍 Votes: 0",
+      "expectedLabels": ["feature-request", "user-submitted"]
+    },
+    {
+      "name": "extra-fields-codepoint-order",
+      "report": { "type": "bug", "title": "t", "description": "Desc", "contactEmail": null, "extraFields": { "Zeta": "z", "alpha": "a", "Beta": "b" } },
+      "deviceInfo": { "appName": "Acme", "appVersion": "1.0", "buildNumber": "1", "model": "Mac", "osName": "macOS", "osVersion": "Version 15.1" },
+      "uploaded": [],
+      "expectedBody": "Desc\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 1.0 (1)\nDevice: Mac\nmacOS Version: Version 15.1\n\n**Beta:**\nb\n\n**Zeta:**\nz\n\n**alpha:**\na\n\n---\n👍 Votes: 0"
+    },
+    {
+      "name": "image-attachment-deterministic-size",
+      "report": { "type": "bug", "title": "t", "description": "See screenshot", "contactEmail": null, "extraFields": {} },
+      "deviceInfo": { "appName": "Acme", "appVersion": "1.0", "buildNumber": "1", "model": "Mac", "osName": "macOS", "osVersion": "Version 15.1" },
+      "uploaded": [ { "filename": "screenshot.png", "mimeType": "image/png", "sizeBytes": 1234, "url": "https://raw.githubusercontent.com/o/r/feedback-attachments/attachments/uuid/screenshot.png" } ],
+      "expectedBody": "See screenshot\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 1.0 (1)\nDevice: Mac\nmacOS Version: Version 15.1\n\n<!-- attachments-v1 -->\n## Attachments\n\n![screenshot.png](https://raw.githubusercontent.com/o/r/feedback-attachments/attachments/uuid/screenshot.png) — image/png, 1.2 KB\n\n<!-- /attachments-v1 -->\n\n---\n👍 Votes: 0"
+    },
+    {
+      "name": "web-osname",
+      "report": { "type": "bug", "title": "t", "description": "d", "contactEmail": null, "extraFields": {} },
+      "deviceInfo": { "appName": "Acme", "appVersion": "3.0", "buildNumber": "300", "model": "Desktop", "osName": "Web", "osVersion": "Chrome 120 on Windows" },
+      "uploaded": [],
+      "expectedBody": "d\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 3.0 (300)\nDevice: Desktop\nWeb Version: Chrome 120 on Windows\n\n---\n👍 Votes: 0"
+    },
+    {
+      "name": "multi-attachment-image-and-file-no-carry-size",
+      "report": { "type": "bug", "title": "t", "description": "Logs attached", "contactEmail": null, "extraFields": {} },
+      "deviceInfo": { "appName": "Acme", "appVersion": "1.0", "buildNumber": "1", "model": "Mac", "osName": "macOS", "osVersion": "Version 15.1" },
+      "uploaded": [
+        { "filename": "screenshot.png", "mimeType": "image/png", "sizeBytes": 999999, "url": "https://example.com/screenshot.png" },
+        { "filename": "trace.log", "mimeType": "text/plain", "sizeBytes": 4096, "url": "https://example.com/trace.log" }
+      ],
+      "expectedBody": "Logs attached\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 1.0 (1)\nDevice: Mac\nmacOS Version: Version 15.1\n\n<!-- attachments-v1 -->\n## Attachments\n\n![screenshot.png](https://example.com/screenshot.png) — image/png, 1000 KB\n\n[trace.log](https://example.com/trace.log) — text/plain, 4.1 KB\n\n<!-- /attachments-v1 -->\n\n---\n👍 Votes: 0"
+    }
+  ]
+}
