@@ -67,7 +67,7 @@ public enum IssueBodyFormatter {
             body += "\n\n**\(BodyMarker.contactEmailLabel)**\n\(email)"
         }
 
-        for key in report.extraFields.keys.sorted() {
+        for key in report.extraFields.keys.sorted(by: Self.codePointOrder) {
             body += "\n\n**\(key):**\n\(report.extraFields[key]!)"
         }
 
@@ -83,6 +83,14 @@ public enum IssueBodyFormatter {
 
         body += "\n\n\(BodyMarker.horizontalRule)\n\(BodyMarker.votesFooter)"
         return body
+    }
+
+    /// Deterministic ordering for `extraFields` keys: ascending by Unicode
+    /// scalar value (code point). Pinned in the wire spec so the Kotlin/TS
+    /// ports replicate it exactly — each language's default string sort is
+    /// *not* guaranteed to equal code-point order for non-ASCII keys.
+    static func codePointOrder(_ a: String, _ b: String) -> Bool {
+        a.unicodeScalars.lexicographicallyPrecedes(b.unicodeScalars) { $0.value < $1.value }
     }
 
     /// Returns the label strings to apply to the created GitHub issue.

@@ -36,8 +36,9 @@ public struct FeedbackReport: Sendable, Equatable {
 
     /// Additional named fields to include in the body.
     ///
-    /// Each entry is rendered as a `**Key:**\nValue` block, sorted by key,
-    /// between the device-info block and the email block. The AppFeedback
+    /// Each entry is rendered as a `**Key:**\nValue` block, sorted by key in
+    /// ascending Unicode scalar (code-point) order, between the device-info
+    /// block and the email block. The AppFeedback
     /// inbox does not currently extract custom keys into typed columns, but
     /// they remain visible in the issue body for triage.
     public var extraFields: [String: String]
