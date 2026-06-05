@@ -106,7 +106,13 @@ public enum IssueBodyParser {
         var inDevice = false
         var expectEmail = false
 
-        for line in raw.components(separatedBy: "\n") {
+        // Normalize line endings so CRLF bodies (e.g. authored in the GitHub web
+        // UI) parse identically to LF. `.whitespaces` does not strip `\r`.
+        let normalized = raw
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+
+        for line in normalized.components(separatedBy: "\n") {
             // Strip bold markers anywhere on the line so `**Contact Email:** foo`
             // and `**Device Information:**` both reduce to the same shape we
             // match below. `trimmed` is used only for marker detection — the
@@ -160,7 +166,7 @@ public enum IssueBodyParser {
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        result.attachments = parseAttachments(in: raw)
+        result.attachments = parseAttachments(in: normalized)
         return result
     }
 
@@ -213,8 +219,9 @@ private func parseAttachmentLine(_ line: String) -> ParsedAttachment? {
     var size: Int?
     if rest.hasPrefix("—") {
         let suffix = rest.dropFirst().trimmingCharacters(in: .whitespaces)
-        let parts = suffix.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
-        if let m = parts.first { mime = m }
+        let parts = suffix.split(separator: ",", maxSplits: 1, omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        if let first = parts.first, !first.isEmpty { mime = first }
         if parts.count > 1 { size = IssueBodyParser.parseHumanByteCount(parts[1]) }
     }
 
