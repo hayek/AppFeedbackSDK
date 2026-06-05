@@ -118,9 +118,9 @@ public enum IssueBodyParser {
             // match below. `trimmed` is used only for marker detection — the
             // original `line` is what we append to the description, so removing
             // `**` here can't corrupt user-formatted body text.
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
                 .replacingOccurrences(of: "**", with: "")
-                .trimmingCharacters(in: .whitespaces)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
 
             if trimmed == BodyMarker.deviceHeader {
                 inDevice = true
@@ -153,7 +153,7 @@ public enum IssueBodyParser {
                     .components(separatedBy: ":")
                     .dropFirst()
                     .joined(separator: ":")
-                    .trimmingCharacters(in: .whitespaces)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
             } else if trimmed == BodyMarker.contactEmailLabel {
                 expectEmail = true
             } else if let value = trimmed.value(after: BodyMarker.contactEmailLabel) {
@@ -162,7 +162,7 @@ public enum IssueBodyParser {
         }
 
         result.description = descLines
-            .filter { $0.trimmingCharacters(in: .whitespaces) != BodyMarker.horizontalRule }
+            .filter { $0.trimmingCharacters(in: .whitespacesAndNewlines) != BodyMarker.horizontalRule }
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -186,7 +186,7 @@ private func parseAttachments(in raw: String) -> [ParsedAttachment] {
 
     var results: [ParsedAttachment] = []
     for rawLine in block.split(separator: "\n", omittingEmptySubsequences: false) {
-        let line = rawLine.trimmingCharacters(in: .whitespaces)
+        let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let parsed = parseAttachmentLine(line) else { continue }
         results.append(parsed)
     }
@@ -213,14 +213,14 @@ private func parseAttachmentLine(_ line: String) -> ParsedAttachment? {
     guard let urlEnd = afterName.firstIndex(of: ")") else { return nil }
     let urlString = String(afterName[..<urlEnd])
     guard let url = URL(string: urlString) else { return nil }
-    let rest = afterName[afterName.index(after: urlEnd)...].trimmingCharacters(in: .whitespaces)
+    let rest = afterName[afterName.index(after: urlEnd)...].trimmingCharacters(in: .whitespacesAndNewlines)
 
     var mime: String?
     var size: Int?
     if rest.hasPrefix("—") {
-        let suffix = rest.dropFirst().trimmingCharacters(in: .whitespaces)
+        let suffix = rest.dropFirst().trimmingCharacters(in: .whitespacesAndNewlines)
         let parts = suffix.split(separator: ",", maxSplits: 1, omittingEmptySubsequences: false)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         if let first = parts.first, !first.isEmpty { mime = first }
         if parts.count > 1 { size = IssueBodyParser.parseHumanByteCount(parts[1]) }
     }
@@ -233,15 +233,18 @@ private func parseAttachmentLine(_ line: String) -> ParsedAttachment? {
 extension IssueBodyParser {
     static func parseHumanByteCount(_ s: String) -> Int? {
         let parts = s.split(separator: " ", maxSplits: 1).map(String.init)
-        guard let numStr = parts.first, let num = Double(numStr) else { return nil }
+        guard let numStr = parts.first, let num = Double(numStr), num.isFinite else { return nil }
         let unit = parts.count > 1 ? parts[1].uppercased() : "B"
+        let mult: Double
         switch unit {
-        case "BYTES", "B": return Int(num)
-        case "KB":         return Int(num * 1_000)
-        case "MB":         return Int(num * 1_000_000)
-        case "GB":         return Int(num * 1_000_000_000)
-        default:           return Int(num)
+        case "KB": mult = 1_000
+        case "MB": mult = 1_000_000
+        case "GB": mult = 1_000_000_000
+        default:   mult = 1   // BYTES, B, or unknown unit -> bytes
         }
+        let scaled = num * mult
+        guard scaled.isFinite, scaled >= 0, scaled <= 100_000_000_000_000 else { return nil }
+        return Int(scaled)
     }
 
     static func inferMimeFromURL(_ url: URL) -> String {
@@ -267,6 +270,6 @@ private extension String {
     /// chain at the call sites in `IssueBodyParser`.
     func value(after marker: String) -> String? {
         guard hasPrefix(marker) else { return nil }
-        return String(dropFirst(marker.count)).trimmingCharacters(in: .whitespaces)
+        return String(dropFirst(marker.count)).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

@@ -18,7 +18,7 @@
 /// upstream, so the integer arithmetic below cannot overflow in practice.
 enum DeterministicByteCount {
     static func string(_ bytes: Int) -> String {
-        let b = max(0, bytes)
+        let b = min(max(0, bytes), 100_000_000_000_000)
         let units: [(name: String, factor: Int)] = [
             ("GB", 1_000_000_000),
             ("MB", 1_000_000),
