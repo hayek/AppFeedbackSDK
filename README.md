@@ -1,5 +1,7 @@
 # AppFeedbackSDK
 
+[![CI](https://github.com/hayek/AppFeedbackSDK/actions/workflows/ci.yml/badge.svg)](https://github.com/hayek/AppFeedbackSDK/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
 A small Swift package that lets your app submit feedback (bugs / feature requests) to a GitHub repository in the exact body format the [AppFeedback](https://github.com/hayek/AppFeedback) inbox parses.
 
 This is the **Apple** SDK and the reference implementation for the [AppFeedback family](https://hayek.github.io/appfeedback-docs/) — the [Android](https://github.com/hayek/appfeedback-android) and [Web](https://github.com/hayek/appfeedback-web) SDKs produce a byte-identical issue body, kept in lockstep by the [`appfeedback-spec`](https://github.com/hayek/appfeedback-spec) golden fixtures.
