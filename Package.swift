@@ -14,6 +14,11 @@ let package = Package(
         .library(name: "AppFeedbackCore", targets: ["AppFeedbackCore"]),
         .library(name: "AppFeedbackUI", targets: ["AppFeedbackUI"]),
     ],
+    dependencies: [
+        // Build-tool plugin only: generates DocC API reference. Does not affect
+        // library consumers or change the package's products.
+        .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.0"),
+    ],
     targets: [
         .target(name: "AppFeedbackCore"),
         .target(
