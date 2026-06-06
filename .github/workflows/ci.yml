@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: swift test (conformance gate)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Swift version
+        run: swift --version
+      # Runs AppFeedbackCoreTests (incl. the golden-fixture ConformanceTests that
+      # pin the cross-platform wire format) and AppFeedbackUITests.
+      - name: Run tests
+        run: swift test

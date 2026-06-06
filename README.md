@@ -1,11 +1,15 @@
 # AppFeedbackSDK
 
-A small Swift package that lets your app submit feedback (bugs / feature requests) to a GitHub repository in the exact body format the [AppFeedback](https://github.com/hayekamir/AppFeedback) inbox parses.
+A small Swift package that lets your app submit feedback (bugs / feature requests) to a GitHub repository in the exact body format the [AppFeedback](https://github.com/hayek/AppFeedback) inbox parses.
+
+This is the **Apple** SDK and the reference implementation for the [AppFeedback family](https://hayek.github.io/appfeedback-docs/) — the [Android](https://github.com/hayek/appfeedback-android) and [Web](https://github.com/hayek/appfeedback-web) SDKs produce a byte-identical issue body, kept in lockstep by the [`appfeedback-spec`](https://github.com/hayek/appfeedback-spec) golden fixtures.
 
 - **AppFeedbackCore** — headless: `FeedbackClient`, transports, body formatter, body parser, multi-platform device info.
 - **AppFeedbackUI** — drop-in SwiftUI sheet (`FeedbackSheet`) with type selector, validation, success animation. Themeable accent + copy.
 
 Platforms: iOS 17 · macOS 14 · watchOS 10 · tvOS 17 · visionOS 1.
+
+📖 Docs: <https://hayek.github.io/appfeedback-docs/> · API reference: <https://hayek.github.io/appfeedback-docs/reference/swift/documentation/>
 
 ## Quick start
 
@@ -159,3 +163,7 @@ DEVELOPER_DIR=/Applications/Xcode-26.5.0.app/Contents/Developer xcrun swift test
 - **v0.2** ✓ — `AppFeedbackUI`: themeable `FeedbackSheet`.
 - **v0.3** ✓ — AppFeedback inbox consumes `AppFeedbackCore.IssueBodyParser` (single source of truth).
 - **v1.0** — `RelayTransport`, attachments (screenshots, logs) via CDN.
+
+## License
+
+MIT © Amir Hayek. See [LICENSE](./LICENSE).
