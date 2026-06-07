@@ -60,6 +60,36 @@
       "name": "attachment-empty-mime-query-string-url",
       "body": "Shot.\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 1.0 (1)\nDevice: Mac\nmacOS Version: Version 15.1\n\n<!-- attachments-v1 -->\n## Attachments\n\n![shot.png](https://example.com/shot.png?token=abc) — , 4 KB\n\n<!-- /attachments-v1 -->\n\n---\n👍 Votes: 0",
       "expected": { "description": "Shot.", "appName": "Acme", "appVersion": "1.0 (1)", "device": "Mac", "osVersion": "Version 15.1", "email": null, "attachments": [ { "filename": "shot.png", "mimeType": "image/png", "url": "https://example.com/shot.png?token=abc", "sizeBytes": 4000 } ] }
+    },
+    {
+      "name": "attachment-hex-size-token-is-null",
+      "body": "Weird size.\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 1.0 (1)\nDevice: Mac\nmacOS Version: Version 15.1\n\n<!-- attachments-v1 -->\n## Attachments\n\n[dump.bin](https://example.com/dump.bin) — application/octet-stream, 0x10 KB\n\n<!-- /attachments-v1 -->\n\n---\n👍 Votes: 0",
+      "expected": { "description": "Weird size.", "appName": "Acme", "appVersion": "1.0 (1)", "device": "Mac", "osVersion": "Version 15.1", "email": null, "attachments": [ { "filename": "dump.bin", "mimeType": "application/octet-stream", "url": "https://example.com/dump.bin", "sizeBytes": null } ] }
+    },
+    {
+      "name": "attachment-binary-size-token-is-null",
+      "body": "Weird size.\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 1.0 (1)\nDevice: Mac\nmacOS Version: Version 15.1\n\n<!-- attachments-v1 -->\n## Attachments\n\n[dump.bin](https://example.com/dump.bin) — application/octet-stream, 0b1010 KB\n\n<!-- /attachments-v1 -->\n\n---\n👍 Votes: 0",
+      "expected": { "description": "Weird size.", "appName": "Acme", "appVersion": "1.0 (1)", "device": "Mac", "osVersion": "Version 15.1", "email": null, "attachments": [ { "filename": "dump.bin", "mimeType": "application/octet-stream", "url": "https://example.com/dump.bin", "sizeBytes": null } ] }
+    },
+    {
+      "name": "device-value-trailing-nbsp-preserved",
+      "body": "Whitespace bug.\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 1.0 (1)\nDevice: Mac15,11 \nmacOS Version: Version 15.1\n\n---\n👍 Votes: 0",
+      "expected": { "description": "Whitespace bug.", "appName": "Acme", "appVersion": "1.0 (1)", "device": "Mac15,11 ", "osVersion": "Version 15.1", "email": null, "attachments": [] }
+    },
+    {
+      "name": "attachment-empty-mime-infers-webp",
+      "body": "Webp.\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 1.0 (1)\nDevice: Mac\nmacOS Version: Version 15.1\n\n<!-- attachments-v1 -->\n## Attachments\n\n![photo.webp](https://example.com/photo.webp) — , 4 KB\n\n<!-- /attachments-v1 -->\n\n---\n👍 Votes: 0",
+      "expected": { "description": "Webp.", "appName": "Acme", "appVersion": "1.0 (1)", "device": "Mac", "osVersion": "Version 15.1", "email": null, "attachments": [ { "filename": "photo.webp", "mimeType": "image/webp", "url": "https://example.com/photo.webp", "sizeBytes": 4000 } ] }
+    },
+    {
+      "name": "attachment-empty-mime-infers-pdf",
+      "body": "Pdf.\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 1.0 (1)\nDevice: Mac\nmacOS Version: Version 15.1\n\n<!-- attachments-v1 -->\n## Attachments\n\n[manual.pdf](https://example.com/manual.pdf) —\n\n<!-- /attachments-v1 -->\n\n---\n👍 Votes: 0",
+      "expected": { "description": "Pdf.", "appName": "Acme", "appVersion": "1.0 (1)", "device": "Mac", "osVersion": "Version 15.1", "email": null, "attachments": [ { "filename": "manual.pdf", "mimeType": "application/pdf", "url": "https://example.com/manual.pdf", "sizeBytes": null } ] }
+    },
+    {
+      "name": "attachment-empty-mime-unknown-ext-falls-back",
+      "body": "Unknown.\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 1.0 (1)\nDevice: Mac\nmacOS Version: Version 15.1\n\n<!-- attachments-v1 -->\n## Attachments\n\n[blob.qux](https://example.com/blob.qux) —\n\n<!-- /attachments-v1 -->\n\n---\n👍 Votes: 0",
+      "expected": { "description": "Unknown.", "appName": "Acme", "appVersion": "1.0 (1)", "device": "Mac", "osVersion": "Version 15.1", "email": null, "attachments": [ { "filename": "blob.qux", "mimeType": "application/octet-stream", "url": "https://example.com/blob.qux", "sizeBytes": null } ] }
     }
   ]
 }

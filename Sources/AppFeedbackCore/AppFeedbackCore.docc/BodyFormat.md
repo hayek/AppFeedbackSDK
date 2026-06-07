@@ -36,7 +36,7 @@ If `contactEmail` is `nil` or empty, the entire `**Contact Email:**` block is om
 
 ## OS labels per platform
 
-The line above the email block uses the platform-specific label `osName Version:`. The parser regex `^(OS|macOS|iOS|iPadOS|watchOS|tvOS|visionOS) Version:` recognises all of these:
+The line above the email block uses the platform-specific label `osName Version:`. The parser regex `^(OS|macOS|iOS|iPadOS|watchOS|tvOS|visionOS|Android|Windows|Linux|Web|ChromeOS) Version:` recognises all of these:
 
 - `macOS Version: …`
 - `iOS Version: …`
@@ -44,6 +44,11 @@ The line above the email block uses the platform-specific label `osName Version:
 - `watchOS Version: …`
 - `tvOS Version: …`
 - `visionOS Version: …`
+- `Android Version: …`
+- `Windows Version: …`
+- `Linux Version: …`
+- `Web Version: …`
+- `ChromeOS Version: …`
 
 So whichever value you put in ``DeviceInfo/osName``, the inbox parses it correctly.
 

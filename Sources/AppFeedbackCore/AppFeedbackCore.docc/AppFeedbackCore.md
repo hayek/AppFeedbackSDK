@@ -7,7 +7,7 @@ Submit feedback from any Apple platform to a GitHub repository in the exact body
 `AppFeedbackCore` is the headless half of the AppFeedback SDK. It packages four pieces:
 
 - ``FeedbackClient`` — the entry point you build once and submit through.
-- ``FeedbackTransport`` — the protocol that decides *where* feedback goes; ``GitHubDirectTransport`` is the built-in implementation that POSTs to GitHub Issues.
+- ``FeedbackTransport`` — the protocol that decides *where* feedback goes. Two implementations ship built in: ``GitHubDirectTransport`` POSTs straight to GitHub Issues, and ``RelayTransport`` POSTs to an adopter-operated relay (the recommended production path — no GitHub credential in the app binary).
 - ``IssueBodyFormatter`` and ``IssueBodyParser`` — the two ends of the wire contract with the AppFeedback inbox app.
 - ``DeviceInfo`` — per-platform device + app metadata that gets attached to every submission.
 
@@ -63,6 +63,7 @@ Construct your own ``DeviceInfo`` if you need to override any field.
 - <doc:SecretsAndTokens>
 - ``FeedbackTransport``
 - ``GitHubDirectTransport``
+- ``RelayTransport``
 
 ### The wire contract
 

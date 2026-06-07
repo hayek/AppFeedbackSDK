@@ -1,5 +1,11 @@
 import Foundation
-import UniformTypeIdentifiers
+
+/// Canonical ASCII whitespace set the parser trims, per the wire-format spec:
+/// `{ U+0009, U+000A, U+000B, U+000C, U+000D, U+0020 }` and nothing else.
+/// Deliberately NOT `.whitespacesAndNewlines`, whose Unicode-defined membership
+/// (NBSP, NEL, BOM, …) diverges from Kotlin/TS `trim` semantics. Non-ASCII
+/// whitespace is preserved verbatim, identically across all three ports.
+private let asciiWhitespace = CharacterSet(charactersIn: "\u{09}\u{0A}\u{0B}\u{0C}\u{0D}\u{20}")
 
 /// A single attachment entry extracted from the `<!-- attachments-v1 -->` block
 /// in a GitHub issue body.
@@ -118,9 +124,9 @@ public enum IssueBodyParser {
             // match below. `trimmed` is used only for marker detection — the
             // original `line` is what we append to the description, so removing
             // `**` here can't corrupt user-formatted body text.
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = line.trimmingCharacters(in: asciiWhitespace)
                 .replacingOccurrences(of: "**", with: "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: asciiWhitespace)
 
             if trimmed == BodyMarker.deviceHeader {
                 inDevice = true
@@ -153,7 +159,7 @@ public enum IssueBodyParser {
                     .components(separatedBy: ":")
                     .dropFirst()
                     .joined(separator: ":")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .trimmingCharacters(in: asciiWhitespace)
             } else if trimmed == BodyMarker.contactEmailLabel {
                 expectEmail = true
             } else if let value = trimmed.value(after: BodyMarker.contactEmailLabel) {
@@ -162,9 +168,9 @@ public enum IssueBodyParser {
         }
 
         result.description = descLines
-            .filter { $0.trimmingCharacters(in: .whitespacesAndNewlines) != BodyMarker.horizontalRule }
+            .filter { $0.trimmingCharacters(in: asciiWhitespace) != BodyMarker.horizontalRule }
             .joined(separator: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: asciiWhitespace)
 
         result.attachments = parseAttachments(in: normalized)
         return result
@@ -186,7 +192,7 @@ private func parseAttachments(in raw: String) -> [ParsedAttachment] {
 
     var results: [ParsedAttachment] = []
     for rawLine in block.split(separator: "\n", omittingEmptySubsequences: false) {
-        let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        let line = rawLine.trimmingCharacters(in: asciiWhitespace)
         guard let parsed = parseAttachmentLine(line) else { continue }
         results.append(parsed)
     }
@@ -213,14 +219,14 @@ private func parseAttachmentLine(_ line: String) -> ParsedAttachment? {
     guard let urlEnd = afterName.firstIndex(of: ")") else { return nil }
     let urlString = String(afterName[..<urlEnd])
     guard let url = URL(string: urlString) else { return nil }
-    let rest = afterName[afterName.index(after: urlEnd)...].trimmingCharacters(in: .whitespacesAndNewlines)
+    let rest = afterName[afterName.index(after: urlEnd)...].trimmingCharacters(in: asciiWhitespace)
 
     var mime: String?
     var size: Int?
     if rest.hasPrefix("—") {
-        let suffix = rest.dropFirst().trimmingCharacters(in: .whitespacesAndNewlines)
+        let suffix = rest.dropFirst().trimmingCharacters(in: asciiWhitespace)
         let parts = suffix.split(separator: ",", maxSplits: 1, omittingEmptySubsequences: false)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .map { $0.trimmingCharacters(in: asciiWhitespace) }
         if let first = parts.first, !first.isEmpty { mime = first }
         if parts.count > 1 { size = IssueBodyParser.parseHumanByteCount(parts[1]) }
     }
@@ -231,9 +237,25 @@ private func parseAttachmentLine(_ line: String) -> ParsedAttachment? {
 }
 
 extension IssueBodyParser {
+    /// ASCII-decimal magnitude grammar, per the wire-format spec:
+    /// `^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$`. Tokens that don't match — e.g.
+    /// `0x10`, `0b1010`, `0o17`, `0xAp2`, `Infinity`, `NaN` — are rejected so the
+    /// size is treated as absent. Swift's `Double` accepts hex / hex-float forms,
+    /// so we MUST gate on this regex before parsing to match Kotlin/TS.
+    private static let decimalMagnitude: NSRegularExpression = {
+        // swiftlint:disable:next force_try
+        try! NSRegularExpression(pattern: "^[+-]?(\\d+\\.?\\d*|\\.\\d+)([eE][+-]?\\d+)?$")
+    }()
+
     static func parseHumanByteCount(_ s: String) -> Int? {
         let parts = s.split(separator: " ", maxSplits: 1).map(String.init)
-        guard let numStr = parts.first, let num = Double(numStr), num.isFinite else { return nil }
+        guard let numStr = parts.first else { return nil }
+        // Reject any non-decimal token before native parsing (Swift `Double`
+        // would otherwise accept `0x10` / hex-float and diverge from Kotlin/TS).
+        guard decimalMagnitude.firstMatch(
+            in: numStr, range: NSRange(numStr.startIndex..., in: numStr)
+        ) != nil else { return nil }
+        guard let num = Double(numStr), num.isFinite else { return nil }
         let unit = parts.count > 1 ? parts[1].uppercased() : "B"
         let mult: Double
         switch unit {
@@ -247,14 +269,19 @@ extension IssueBodyParser {
         return Int(scaled)
     }
 
+    /// Best-effort MIME from a URL's file extension. Uses the fixed, canonical
+    /// extension→MIME table from the wire-format spec — identical to the Kotlin
+    /// and TypeScript ports. Deliberately NOT `UTType`, whose membership varies
+    /// by OS / installed type declarations and would diverge cross-platform.
     static func inferMimeFromURL(_ url: URL) -> String {
         let ext = url.pathExtension.lowercased()
-        if let type = UTType(filenameExtension: ext), let mime = type.preferredMIMEType {
-            return mime
-        }
-        // Wider than the SDK upload allowlist by design — the parser tolerates
-        // hand-written or legacy bodies, while the writer only emits allowlisted types.
         switch ext {
+        case "png":                return "image/png"
+        case "jpg", "jpeg":        return "image/jpeg"
+        case "gif":                return "image/gif"
+        case "heic":               return "image/heic"
+        case "webp":               return "image/webp"
+        case "pdf":                return "application/pdf"
         case "log", "txt", "text": return "text/plain"
         case "json":               return "application/json"
         case "xml":                return "application/xml"
@@ -270,6 +297,6 @@ private extension String {
     /// chain at the call sites in `IssueBodyParser`.
     func value(after marker: String) -> String? {
         guard hasPrefix(marker) else { return nil }
-        return String(dropFirst(marker.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(dropFirst(marker.count)).trimmingCharacters(in: asciiWhitespace)
     }
 }

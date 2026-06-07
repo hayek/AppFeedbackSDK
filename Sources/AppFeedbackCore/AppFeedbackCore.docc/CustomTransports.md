@@ -12,26 +12,38 @@ public protocol FeedbackTransport: Sendable {
 }
 ```
 
-## A relay transport
+## Use the built-in relay transport
 
-The most common reason to replace the default transport is to avoid shipping a GitHub PAT inside the app binary (see <doc:SecretsAndTokens>). A small relay server holds the credential, exposes a thin HTTPS endpoint, and applies abuse controls. The client then looks like this:
+The most common reason to replace the default transport is to avoid shipping a GitHub PAT inside the app binary (see <doc:SecretsAndTokens>). A relay server holds the credential, exposes a thin HTTPS endpoint, and applies abuse controls. **You don't have to write this transport** — the SDK ships ``RelayTransport``, which speaks the canonical relay contract (the same one the AppFeedback Web and Android SDKs target):
 
 ```swift
-public struct RelayTransport: FeedbackTransport {
+let transport = RelayTransport(
+    endpoint: URL(string: "https://your-relay.example.com/api/feedback")!,
+    captchaToken: token   // optional Turnstile/hCaptcha token, omitted when nil
+)
+let feedback = FeedbackClient(appName: "AcmeApp", transport: transport)
+```
+
+``RelayTransport`` POSTs a JSON body with `type`, `title`, `description`, optional `contactEmail`, `extraFields`, a nested `deviceInfo` object, and optional `captchaToken`, then decodes the relay's `{ "issueNumber", "issueUrl" }` response. No GitHub credential ever ships in the app binary.
+
+## Writing your own relay transport
+
+If your backend speaks a different protocol, conform to ``FeedbackTransport`` directly. The example below mirrors the same wire shape ``RelayTransport`` uses — a nested `deviceInfo` object, `contactEmail` (not `email`), and `extraFields` plus an optional `captchaToken`:
+
+```swift
+public struct MyRelayTransport: FeedbackTransport {
     public let endpoint: URL
+    public let captchaToken: String?
     public let session: URLSession
 
-    public init(endpoint: URL, session: URLSession = .shared) {
+    public init(endpoint: URL, captchaToken: String? = nil, session: URLSession = .shared) {
         self.endpoint = endpoint
+        self.captchaToken = captchaToken
         self.session = session
     }
 
     public func submit(_ report: FeedbackReport, deviceInfo: DeviceInfo) async throws -> Int {
-        struct Payload: Encodable {
-            let type: String
-            let title: String
-            let description: String
-            let email: String?
+        struct DeviceInfoPayload: Encodable {
             let appName: String
             let appVersion: String
             let buildNumber: String
@@ -39,17 +51,30 @@ public struct RelayTransport: FeedbackTransport {
             let osName: String
             let osVersion: String
         }
+        struct Payload: Encodable {
+            let type: FeedbackType
+            let title: String
+            let description: String
+            let contactEmail: String?
+            let extraFields: [String: String]
+            let deviceInfo: DeviceInfoPayload
+            let captchaToken: String?
+        }
         let payload = Payload(
-            type: report.type.rawValue,
+            type: report.type,
             title: report.title,
             description: report.description,
-            email: report.contactEmail,
-            appName: deviceInfo.appName,
-            appVersion: deviceInfo.appVersion,
-            buildNumber: deviceInfo.buildNumber,
-            model: deviceInfo.model,
-            osName: deviceInfo.osName,
-            osVersion: deviceInfo.osVersion
+            contactEmail: report.contactEmail,
+            extraFields: report.extraFields,
+            deviceInfo: DeviceInfoPayload(
+                appName: deviceInfo.appName,
+                appVersion: deviceInfo.appVersion,
+                buildNumber: deviceInfo.buildNumber,
+                model: deviceInfo.model,
+                osName: deviceInfo.osName,
+                osVersion: deviceInfo.osVersion
+            ),
+            captchaToken: captchaToken
         )
 
         var request = URLRequest(url: endpoint)
@@ -96,4 +121,5 @@ Transports should throw ``FeedbackSubmissionError`` for known conditions and let
 
 - ``FeedbackTransport``
 - ``GitHubDirectTransport``
+- ``RelayTransport``
 - ``FeedbackSubmissionError``

@@ -146,7 +146,7 @@ targets:
 ### Remote (when published)
 
 ```swift
-.package(url: "https://github.com/hayek/AppFeedbackSDK", from: "0.2.0"),
+.package(url: "https://github.com/hayek/AppFeedbackSDK", branch: "main"),
 ```
 
 ## Migrating an existing in-tree implementation

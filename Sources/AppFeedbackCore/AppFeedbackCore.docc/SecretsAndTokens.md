@@ -30,7 +30,17 @@ If any of these stop being true, move to a relay.
 
 ## Moving to a relay
 
-The cleanest mitigation is to keep the credential on a server you control and expose a thin HTTPS endpoint. The SDK is designed for this — implement ``FeedbackTransport`` and your app never sees a GitHub token. See <doc:CustomTransports> for a worked example.
+The cleanest mitigation is to keep the credential on a server you control and expose a thin HTTPS endpoint. The SDK ships a ready-made ``RelayTransport`` for exactly this — point it at your relay's URL and your app never sees a GitHub token:
+
+```swift
+let transport = RelayTransport(
+    endpoint: URL(string: "https://your-relay.example.com/api/feedback")!,
+    captchaToken: token   // optional bot-mitigation token, omitted when nil
+)
+let feedback = FeedbackClient(appName: "AcmeApp", transport: transport)
+```
+
+``RelayTransport`` is wire-compatible with the same relays the AppFeedback Web and Android SDKs target. See <doc:CustomTransports> if you need to write your own transport for a different backend.
 
 Once the relay holds the token, you also get:
 
@@ -51,4 +61,5 @@ Even if you're embedding a PAT in the binary, the source should never have it in
 ## Topics
 
 - ``GitHubDirectTransport``
+- ``RelayTransport``
 - <doc:CustomTransports>
