@@ -1,0 +1,37 @@
+name: Bug report
+description: Report a problem with the AppFeedback Apple/Swift SDK.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please search existing issues
+        first, then fill in as much detail as you can — reproduction steps are
+        the single most useful thing you can give us.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps, ideally with a minimal code snippet.
+      placeholder: |
+        1. Add AppFeedbackUI to a SwiftUI view
+        2. Call ...
+        3. Observe ...
+  - type: input
+    id: version
+    attributes:
+      label: Platform / version
+      description: SDK version or commit, plus OS (e.g. iOS 18.6, macOS 15).
+      placeholder: "AppFeedbackSDK main @abc1234, iOS 18.6"
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Xcode version, Swift toolchain, device/simulator, and anything else relevant.
