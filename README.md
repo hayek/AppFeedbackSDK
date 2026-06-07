@@ -25,7 +25,7 @@ let feedback = FeedbackClient(
     transport: GitHubDirectTransport(
         owner: "hayek",
         repo: "FeedbackRepo",
-        token: GitHubTokenLoader.token   // see "Secrets" below
+        token: myStoredGitHubToken   // load from the Keychain — see "Secrets" below
     )
 )
 

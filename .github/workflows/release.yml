@@ -20,6 +20,17 @@ jobs:
       - uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable
+      # Don't cut a release on drifted conformance fixtures (the release path
+      # must be no weaker than the PR/push fixtures-in-sync gate in ci.yml).
+      - name: Verify fixtures match appfeedback-spec
+        run: |
+          set -euo pipefail
+          base=https://raw.githubusercontent.com/hayek/appfeedback-spec/main/fixtures
+          dir=Tests/AppFeedbackCoreTests/Fixtures/conformance
+          for f in format-cases.json parse-cases.json; do
+            curl -fsSL "$base/$f" -o "/tmp/$f"
+            diff -u "/tmp/$f" "$dir/$f"
+          done
       - name: Verify build & tests
         run: swift test
       - name: Create GitHub Release

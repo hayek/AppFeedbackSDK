@@ -217,6 +217,9 @@ private func parseAttachmentLine(_ line: String) -> ParsedAttachment? {
     let filename = String(working[..<nameEnd.lowerBound])
     let afterName = working[nameEnd.upperBound...]
     guard let urlEnd = afterName.firstIndex(of: ")") else { return nil }
+    // Attachment URLs are assumed to be valid absolute URLs (real GitHub
+    // attachment URLs always are); a malformed url is skipped. MIME is inferred
+    // from the raw url text below so it matches the Kotlin/TS ports.
     let urlString = String(afterName[..<urlEnd])
     guard let url = URL(string: urlString) else { return nil }
     let rest = afterName[afterName.index(after: urlEnd)...].trimmingCharacters(in: asciiWhitespace)
@@ -231,7 +234,7 @@ private func parseAttachmentLine(_ line: String) -> ParsedAttachment? {
         if parts.count > 1 { size = IssueBodyParser.parseHumanByteCount(parts[1]) }
     }
 
-    let resolvedMime = mime ?? IssueBodyParser.inferMimeFromURL(url)
+    let resolvedMime = mime ?? IssueBodyParser.inferMimeFromURL(urlString)
 
     return ParsedAttachment(filename: filename, mimeType: resolvedMime, url: url, sizeBytes: size)
 }
@@ -248,15 +251,27 @@ extension IssueBodyParser {
     }()
 
     static func parseHumanByteCount(_ s: String) -> Int? {
-        let parts = s.split(separator: " ", maxSplits: 1).map(String.init)
-        guard let numStr = parts.first else { return nil }
+        // Split on the FIRST ASCII space: magnitude is the substring before it,
+        // unit is everything after with the canonical ASCII whitespace trimmed
+        // from both ends (so `4000  KB` collapses to magnitude `4000`, unit `KB`).
+        // Deliberately NOT `split(maxSplits:)`, which leaves the extra leading
+        // space on the unit field and silently demotes `4000  KB` to bytes.
+        let numStr: String
+        let unit: String
+        if let sp = s.firstIndex(of: " ") {
+            numStr = String(s[..<sp])
+            unit = s[s.index(after: sp)...].trimmingCharacters(in: asciiWhitespace).uppercased()
+        } else {
+            numStr = s
+            unit = "B"
+        }
+        if numStr.isEmpty { return nil }
         // Reject any non-decimal token before native parsing (Swift `Double`
         // would otherwise accept `0x10` / hex-float and diverge from Kotlin/TS).
         guard decimalMagnitude.firstMatch(
             in: numStr, range: NSRange(numStr.startIndex..., in: numStr)
         ) != nil else { return nil }
         guard let num = Double(numStr), num.isFinite else { return nil }
-        let unit = parts.count > 1 ? parts[1].uppercased() : "B"
         let mult: Double
         switch unit {
         case "KB": mult = 1_000
@@ -273,8 +288,21 @@ extension IssueBodyParser {
     /// extension→MIME table from the wire-format spec — identical to the Kotlin
     /// and TypeScript ports. Deliberately NOT `UTType`, whose membership varies
     /// by OS / installed type declarations and would diverge cross-platform.
-    static func inferMimeFromURL(_ url: URL) -> String {
-        let ext = url.pathExtension.lowercased()
+    ///
+    /// The extension is extracted **manually** (NOT `URL.pathExtension`, which
+    /// returns the empty string for a final segment like `.png` and would wrongly
+    /// fall back to octet-stream): strip `?query`/`#fragment`, take the last path
+    /// segment, then lower-case everything after that segment's FINAL `.`. A
+    /// dotfile segment such as `.png` therefore infers `image/png`.
+    static func inferMimeFromURL(_ url: String) -> String {
+        let path = url.prefix { $0 != "?" && $0 != "#" }
+        let lastSegment = path.split(separator: "/", omittingEmptySubsequences: false).last.map(String.init) ?? ""
+        let ext: String
+        if let dot = lastSegment.lastIndex(of: ".") {
+            ext = lastSegment[lastSegment.index(after: dot)...].lowercased()
+        } else {
+            ext = ""
+        }
         switch ext {
         case "png":                return "image/png"
         case "jpg", "jpeg":        return "image/jpeg"

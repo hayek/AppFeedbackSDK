@@ -90,6 +90,21 @@
       "name": "attachment-empty-mime-unknown-ext-falls-back",
       "body": "Unknown.\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 1.0 (1)\nDevice: Mac\nmacOS Version: Version 15.1\n\n<!-- attachments-v1 -->\n## Attachments\n\n[blob.qux](https://example.com/blob.qux) —\n\n<!-- /attachments-v1 -->\n\n---\n👍 Votes: 0",
       "expected": { "description": "Unknown.", "appName": "Acme", "appVersion": "1.0 (1)", "device": "Mac", "osVersion": "Version 15.1", "email": null, "attachments": [ { "filename": "blob.qux", "mimeType": "application/octet-stream", "url": "https://example.com/blob.qux", "sizeBytes": null } ] }
+    },
+    {
+      "name": "attachment-size-double-space-unit-applied",
+      "body": "Double space size.\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 1.0 (1)\nDevice: Mac\nmacOS Version: Version 15.1\n\n<!-- attachments-v1 -->\n## Attachments\n\n[data.bin](https://example.com/data.bin) — application/octet-stream, 4000  KB\n\n<!-- /attachments-v1 -->\n\n---\n👍 Votes: 0",
+      "expected": { "description": "Double space size.", "appName": "Acme", "appVersion": "1.0 (1)", "device": "Mac", "osVersion": "Version 15.1", "email": null, "attachments": [ { "filename": "data.bin", "mimeType": "application/octet-stream", "url": "https://example.com/data.bin", "sizeBytes": 4000000 } ] }
+    },
+    {
+      "name": "attachment-size-single-space-unit-applied",
+      "body": "Single space size.\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 1.0 (1)\nDevice: Mac\nmacOS Version: Version 15.1\n\n<!-- attachments-v1 -->\n## Attachments\n\n[data.bin](https://example.com/data.bin) — application/octet-stream, 4 KB\n\n<!-- /attachments-v1 -->\n\n---\n👍 Votes: 0",
+      "expected": { "description": "Single space size.", "appName": "Acme", "appVersion": "1.0 (1)", "device": "Mac", "osVersion": "Version 15.1", "email": null, "attachments": [ { "filename": "data.bin", "mimeType": "application/octet-stream", "url": "https://example.com/data.bin", "sizeBytes": 4000 } ] }
+    },
+    {
+      "name": "attachment-dotfile-segment-infers-png",
+      "body": "Dotfile.\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 1.0 (1)\nDevice: Mac\nmacOS Version: Version 15.1\n\n<!-- attachments-v1 -->\n## Attachments\n\n![.png](https://example.com/.png) —\n\n<!-- /attachments-v1 -->\n\n---\n👍 Votes: 0",
+      "expected": { "description": "Dotfile.", "appName": "Acme", "appVersion": "1.0 (1)", "device": "Mac", "osVersion": "Version 15.1", "email": null, "attachments": [ { "filename": ".png", "mimeType": "image/png", "url": "https://example.com/.png", "sizeBytes": null } ] }
     }
   ]
 }
