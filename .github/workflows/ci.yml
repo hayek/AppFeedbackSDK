@@ -23,3 +23,24 @@ jobs:
       # pin the cross-platform wire format) and AppFeedbackUITests.
       - name: Run tests
         run: swift test
+
+  fixtures-in-sync:
+    name: fixtures match appfeedback-spec
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The conformance gate only means something if the vendored golden fixtures
+      # still match the canonical ones in appfeedback-spec. Fail loudly on drift.
+      - name: Diff vendored fixtures against the canonical spec
+        run: |
+          set -euo pipefail
+          base=https://raw.githubusercontent.com/hayek/appfeedback-spec/main/fixtures
+          dir=Tests/AppFeedbackCoreTests/Fixtures/conformance
+          for f in format-cases.json parse-cases.json; do
+            curl -fsSL "$base/$f" -o "/tmp/$f"
+            if ! diff -u "/tmp/$f" "$dir/$f"; then
+              echo "::error::$f drifted from appfeedback-spec — re-run the spec's sync-to-swift.sh and commit."
+              exit 1
+            fi
+          done
+          echo "Vendored fixtures are in sync with appfeedback-spec."
