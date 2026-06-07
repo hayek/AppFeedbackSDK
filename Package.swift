@@ -1,5 +1,16 @@
 // swift-tools-version: 6.0
 import PackageDescription
+import class Foundation.ProcessInfo
+
+// swift-docc-plugin is a build-tool plugin used only to generate the DocC API
+// reference. A top-level package dependency is resolved into EVERY consumer's
+// graph (SwiftPM doesn't prune the resolution closure), so gate it behind an env
+// var — set APPFEEDBACK_BUILD_DOCS=1 in the docs-generation step — to keep it out
+// of adopters' checkouts. See scripts/regen-api-refs.sh / RELEASING.md.
+let buildingDocs = ProcessInfo.processInfo.environment["APPFEEDBACK_BUILD_DOCS"] != nil
+let doccPluginDependencies: [Package.Dependency] = buildingDocs
+    ? [.package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.0")]
+    : []
 
 let package = Package(
     name: "AppFeedbackSDK",
@@ -14,11 +25,7 @@ let package = Package(
         .library(name: "AppFeedbackCore", targets: ["AppFeedbackCore"]),
         .library(name: "AppFeedbackUI", targets: ["AppFeedbackUI"]),
     ],
-    dependencies: [
-        // Build-tool plugin only: generates DocC API reference. Does not affect
-        // library consumers or change the package's products.
-        .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.0"),
-    ],
+    dependencies: doccPluginDependencies,
     targets: [
         .target(name: "AppFeedbackCore"),
         .target(
