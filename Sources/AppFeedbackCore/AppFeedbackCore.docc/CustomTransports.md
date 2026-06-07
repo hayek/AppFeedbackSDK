@@ -19,12 +19,14 @@ The most common reason to replace the default transport is to avoid shipping a G
 ```swift
 let transport = RelayTransport(
     endpoint: URL(string: "https://your-relay.example.com/api/feedback")!,
-    captchaToken: token   // optional Turnstile/hCaptcha token, omitted when nil
+    captchaTokenProvider: { await captcha.freshToken() }  // optional, fetched per submit
 )
 let feedback = FeedbackClient(appName: "AcmeApp", transport: transport)
 ```
 
 ``RelayTransport`` POSTs a JSON body with `type`, `title`, `description`, optional `contactEmail`, `extraFields`, a nested `deviceInfo` object, and optional `captchaToken`, then decodes the relay's `{ "issueNumber", "issueUrl" }` response. No GitHub credential ever ships in the app binary.
+
+The optional `captchaTokenProvider` is an `async` closure invoked **once per submission**, so each request carries a fresh Turnstile/hCaptcha token — these are single-use and expire in minutes, and the transport outlives any one submission. Return `nil` (or omit the provider) to leave `captchaToken` out of the body.
 
 ## Writing your own relay transport
 

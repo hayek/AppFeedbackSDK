@@ -27,6 +27,26 @@ import Foundation
 /// the `{ "issueNumber": Int, "issueUrl": String }` response and returns the
 /// issue number.
 ///
+/// ## CAPTCHA tokens are fetched per submission
+///
+/// CAPTCHA tokens (Cloudflare Turnstile / hCaptcha) are single-use and
+/// short-lived (typically ~120–300s). A `FeedbackClient` — and therefore the
+/// transport it holds — is built once at app start and kept for the process
+/// lifetime, so a token captured at construction time would always be stale or
+/// already consumed by the time `submit` runs. For that reason the transport
+/// takes a `captchaTokenProvider` closure that is invoked **on every**
+/// `submit`, yielding a fresh token each time:
+///
+/// ```swift
+/// let transport = RelayTransport(
+///     endpoint: URL(string: "https://your-relay.example.com/api/feedback")!,
+///     captchaTokenProvider: { await captcha.freshToken() }  // fresh per submit
+/// )
+/// ```
+///
+/// This mirrors the per-submission `getCaptchaToken` / `captchaTokenProvider`
+/// contract of the AppFeedback Web and Android SDKs.
+///
 /// > Note: Attachments are **not** sent by this transport. The relay contract
 /// > carries them, but the Apple SDK's attachment-upload path currently targets
 /// > ``GitHubDirectTransport`` only; relay attachment support is tracked
@@ -39,31 +59,60 @@ public struct RelayTransport: FeedbackTransport {
     /// application/json`.
     public let endpoint: URL
 
-    /// Optional bot-mitigation token (e.g. Cloudflare Turnstile / hCaptcha)
-    /// forwarded to the relay as `captchaToken`. When `nil`, the field is
+    /// Optional provider of a bot-mitigation token (e.g. Cloudflare Turnstile /
+    /// hCaptcha) forwarded to the relay as `captchaToken`. Invoked **once per**
+    /// ``submit(_:deviceInfo:)`` so each request carries a fresh, unconsumed
+    /// token. When `nil`, or when the provider returns `nil`, the field is
     /// omitted from the request body.
-    public let captchaToken: String?
+    public let captchaTokenProvider: (@Sendable () async -> String?)?
 
     /// The session used for the POST request. Override for tests via a
     /// `URLProtocol` stub.
     public let session: URLSession
 
-    /// Builds a transport.
+    /// Builds a transport that fetches a fresh CAPTCHA token per submission.
     ///
     /// - Parameters:
     ///   - endpoint: Absolute URL of your relay (per the relay contract).
-    ///   - captchaToken: Optional bot-mitigation token to forward. Defaults to
-    ///     `nil`, in which case the `captchaToken` field is omitted.
+    ///   - captchaTokenProvider: Optional async closure that yields a
+    ///     bot-mitigation token. It is called on **every** submission, so it
+    ///     should return a freshly minted token (CAPTCHA tokens are single-use
+    ///     and expire in minutes). Defaults to `nil`, in which case the
+    ///     `captchaToken` field is omitted. Returning `nil` from the provider
+    ///     omits it too.
     ///   - session: Defaults to `.shared`. Pass an ephemeral session with a
     ///     `URLProtocol` stub in tests.
     public init(
         endpoint: URL,
-        captchaToken: String? = nil,
+        captchaTokenProvider: (@Sendable () async -> String?)? = nil,
         session: URLSession = .shared
     ) {
         self.endpoint = endpoint
-        self.captchaToken = captchaToken
+        self.captchaTokenProvider = captchaTokenProvider
         self.session = session
+    }
+
+    /// Builds a transport from a constant CAPTCHA token.
+    ///
+    /// - Important: This is a convenience for backends whose token is a static
+    ///   shared secret, **not** a per-request CAPTCHA challenge. Single-use
+    ///   tokens (Turnstile/hCaptcha) will be stale by submit time — use
+    ///   ``init(endpoint:captchaTokenProvider:session:)`` and mint a fresh token
+    ///   inside the closure instead.
+    /// - Parameters:
+    ///   - endpoint: Absolute URL of your relay (per the relay contract).
+    ///   - captchaToken: A constant token forwarded on every submission.
+    ///   - session: Defaults to `.shared`.
+    public init(
+        endpoint: URL,
+        captchaToken: String,
+        session: URLSession = .shared
+    ) {
+        self.init(
+            endpoint: endpoint,
+            captchaTokenProvider: { captchaToken },
+            session: session
+        )
     }
 
     /// Posts a report to the relay.
@@ -80,6 +129,10 @@ public struct RelayTransport: FeedbackTransport {
     ///   `403` CAPTCHA/auth, `502` GitHub upstream); the body, when present,
     ///   carries the relay's `{ "error": String }` payload.
     public func submit(_ report: FeedbackReport, deviceInfo: DeviceInfo) async throws -> Int {
+        // Fetch a fresh CAPTCHA token for this submission; tokens are single-use
+        // and short-lived, so a value captured at construction time would be stale.
+        let token = await captchaTokenProvider?()
+
         let payload = RelayRequest(
             type: report.type,
             title: report.title,
@@ -87,7 +140,7 @@ public struct RelayTransport: FeedbackTransport {
             contactEmail: report.contactEmail,
             extraFields: report.extraFields,
             deviceInfo: DeviceInfoPayload(deviceInfo),
-            captchaToken: captchaToken
+            captchaToken: token
         )
 
         var request = URLRequest(url: endpoint)

@@ -76,7 +76,14 @@ final class RelayTransportTests: XCTestCase {
         XCTAssertEqual(issueNumber, 1234)
     }
 
-    func test_omits_contactEmail_when_nil_and_includes_captchaToken_when_set() async throws {
+    func test_omits_contactEmail_when_nil_and_fetches_fresh_captchaToken_per_submit() async throws {
+        // The provider mints a *different* token on each call. A correct
+        // implementation invokes it per submission, so each request body must
+        // carry that submission's freshly-returned token — never a stale one
+        // captured at construction time.
+        let providerCalls = TokenCounter()
+        let captchaTokens = TokenRecorder()
+
         URLProtocolStub.respond { request in
             let bodyData = request.bodyData ?? Data()
             let decoded = try! JSONSerialization.jsonObject(with: bodyData) as! [String: Any]
@@ -84,9 +91,9 @@ final class RelayTransportTests: XCTestCase {
             // contactEmail is absent (not null) when the report has none.
             XCTAssertNil(decoded["contactEmail"])
             XCTAssertFalse(decoded.keys.contains("contactEmail"))
-            // captchaToken forwarded when configured on the transport.
-            XCTAssertEqual(decoded["captchaToken"] as? String, "turnstile-abc")
             XCTAssertEqual(decoded["type"] as? String, "bug")
+
+            captchaTokens.record(decoded["captchaToken"] as? String)
 
             return (
                 HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -96,16 +103,46 @@ final class RelayTransportTests: XCTestCase {
 
         let transport = RelayTransport(
             endpoint: endpoint,
-            captchaToken: "turnstile-abc",
+            captchaTokenProvider: { "turnstile-\(providerCalls.next())" },
             session: makeSession()
         )
 
+        let report = FeedbackReport(type: .bug, title: "Crash", description: "Boom")
+
+        let first = try await transport.submit(report, deviceInfo: device)
+        let second = try await transport.submit(report, deviceInfo: device)
+
+        XCTAssertEqual(first, 7)
+        XCTAssertEqual(second, 7)
+
+        // Provider invoked once per submit (not once at construction).
+        XCTAssertEqual(providerCalls.count, 2)
+        // Each request carried its own freshly-minted token, in order.
+        XCTAssertEqual(captchaTokens.recorded, ["turnstile-1", "turnstile-2"])
+    }
+
+    func test_omits_captchaToken_when_no_provider() async throws {
+        let captchaTokens = TokenRecorder()
+        URLProtocolStub.respond { request in
+            let bodyData = request.bodyData ?? Data()
+            let decoded = try! JSONSerialization.jsonObject(with: bodyData) as! [String: Any]
+            // captchaToken absent (not null) when no provider is configured.
+            XCTAssertNil(decoded["captchaToken"])
+            XCTAssertFalse(decoded.keys.contains("captchaToken"))
+            captchaTokens.record(decoded["captchaToken"] as? String)
+            return (
+                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                #"{"issueNumber":9,"issueUrl":"https://x/issues/9"}"#.data(using: .utf8)!
+            )
+        }
+
+        let transport = RelayTransport(endpoint: endpoint, session: makeSession())
         let issueNumber = try await transport.submit(
             FeedbackReport(type: .bug, title: "Crash", description: "Boom"),
             deviceInfo: device
         )
-
-        XCTAssertEqual(issueNumber, 7)
+        XCTAssertEqual(issueNumber, 9)
+        XCTAssertEqual(captchaTokens.recorded, [nil])
     }
 
     func test_validation_400_throws_httpStatus_with_error_body() async {
@@ -176,5 +213,42 @@ final class RelayTransportTests: XCTestCase {
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
+    }
+}
+
+// MARK: - Test helpers
+
+/// Thread-safe call counter — the `@Sendable` captcha provider may run off the
+/// test's task, so plain mutable state isn't safe to capture.
+private final class TokenCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+
+    /// Increments and returns the new count.
+    func next() -> Int {
+        lock.lock(); defer { lock.unlock() }
+        value += 1
+        return value
+    }
+
+    var count: Int {
+        lock.lock(); defer { lock.unlock() }
+        return value
+    }
+}
+
+/// Thread-safe recorder of the `captchaToken` seen in each request body.
+private final class TokenRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [String?] = []
+
+    func record(_ token: String?) {
+        lock.lock(); defer { lock.unlock() }
+        values.append(token)
+    }
+
+    var recorded: [String?] {
+        lock.lock(); defer { lock.unlock() }
+        return values
     }
 }

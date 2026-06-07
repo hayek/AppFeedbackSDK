@@ -35,7 +35,7 @@ The cleanest mitigation is to keep the credential on a server you control and ex
 ```swift
 let transport = RelayTransport(
     endpoint: URL(string: "https://your-relay.example.com/api/feedback")!,
-    captchaToken: token   // optional bot-mitigation token, omitted when nil
+    captchaTokenProvider: { await captcha.freshToken() }  // optional, fetched per submit
 )
 let feedback = FeedbackClient(appName: "AcmeApp", transport: transport)
 ```

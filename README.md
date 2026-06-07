@@ -119,7 +119,7 @@ let transport = RelayTransport(
 let feedback = FeedbackClient(appName: "AcmeApp", transport: transport)
 ```
 
-Pass `captchaToken:` to forward a bot-mitigation token (e.g. Turnstile/hCaptcha) the relay requires. No GitHub credential ever ships in the app binary.
+Pass `captchaTokenProvider:` — an `async` closure — to forward a bot-mitigation token (e.g. Turnstile/hCaptcha) the relay requires. It's invoked **once per submission**, so mint a fresh token inside it: CAPTCHA tokens are single-use and expire in minutes, and the transport is built once at app start and held for the process lifetime, so a token captured at construction would be stale by submit time. No GitHub credential ever ships in the app binary.
 
 ## Adding the package to your project
 
@@ -173,7 +173,7 @@ DEVELOPER_DIR=/Applications/Xcode-26.5.0.app/Contents/Developer xcrun swift test
 - **v0.1** ✓ — `AppFeedbackCore`: client, transport protocol, GitHub direct transport, formatter, parser, device info, errors.
 - **v0.2** ✓ — `AppFeedbackUI`: themeable `FeedbackSheet`.
 - **v0.3** ✓ — AppFeedback inbox consumes `AppFeedbackCore.IssueBodyParser` (single source of truth).
-- **v1.0** — `RelayTransport` ✓ (relay-contract wire-compatible with the Web/Android SDKs). Roadmap: attachments (screenshots, logs) via CDN on the relay path.
+- **v1.0** — `RelayTransport` ✓ (relay-contract wire-compatible with the Web/Android SDKs). Attachments (screenshots, logs) ✓ — validated and preprocessed client-side, uploaded by `GitHubDirectTransport` (committed to a branch via the GitHub Contents API), and written into / parsed back out of the issue body's `attachments-v1` block. Remaining gap: `RelayTransport` does not yet forward attachments — relay-path uploads are tracked separately.
 
 ## License
 
