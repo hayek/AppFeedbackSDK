@@ -108,9 +108,18 @@ let theme = FeedbackTheme(
 
 1. **Nothing.** Token is in plaintext. Fine for closed beta / internal tools.
 2. **XOR-obfuscate at rest, decode at runtime.** Raises the bar slightly. Anyone determined still wins.
-3. **Server-side relay.** Implement `FeedbackTransport` to POST to your endpoint; your server holds the PAT, rate-limits, and can mirror to GitHub. This is the only path that actually contains the blast radius.
+3. **Server-side relay.** Point the SDK at an endpoint you control; your server holds the PAT, rate-limits, verifies an optional CAPTCHA, and mirrors to GitHub. This is the only path that actually contains the blast radius.
 
-The SDK ships the protocol surface for option 3 (`FeedbackTransport`); a concrete `RelayTransport` is on the v1.0 roadmap.
+The SDK ships a concrete `RelayTransport` for option 3 — wire-compatible with the same relays the AppFeedback Web and Android SDKs target:
+
+```swift
+let transport = RelayTransport(
+    endpoint: URL(string: "https://your-relay.example.com/api/feedback")!
+)
+let feedback = FeedbackClient(appName: "AcmeApp", transport: transport)
+```
+
+Pass `captchaToken:` to forward a bot-mitigation token (e.g. Turnstile/hCaptcha) the relay requires. No GitHub credential ever ships in the app binary.
 
 ## Adding the package to your project
 
@@ -164,7 +173,7 @@ DEVELOPER_DIR=/Applications/Xcode-26.5.0.app/Contents/Developer xcrun swift test
 - **v0.1** ✓ — `AppFeedbackCore`: client, transport protocol, GitHub direct transport, formatter, parser, device info, errors.
 - **v0.2** ✓ — `AppFeedbackUI`: themeable `FeedbackSheet`.
 - **v0.3** ✓ — AppFeedback inbox consumes `AppFeedbackCore.IssueBodyParser` (single source of truth).
-- **v1.0** — `RelayTransport`, attachments (screenshots, logs) via CDN.
+- **v1.0** — `RelayTransport` ✓ (relay-contract wire-compatible with the Web/Android SDKs). Roadmap: attachments (screenshots, logs) via CDN on the relay path.
 
 ## License
 
