@@ -6,7 +6,8 @@ import class Foundation.ProcessInfo
 // reference. A top-level package dependency is resolved into EVERY consumer's
 // graph (SwiftPM doesn't prune the resolution closure), so gate it behind an env
 // var — set APPFEEDBACK_BUILD_DOCS=1 in the docs-generation step — to keep it out
-// of adopters' checkouts. See scripts/regen-api-refs.sh / RELEASING.md.
+// of adopters' checkouts. The docs site's regen script
+// (appfeedback-docs/scripts/regen-api-refs.sh) sets this when generating DocC.
 let buildingDocs = ProcessInfo.processInfo.environment["APPFEEDBACK_BUILD_DOCS"] != nil
 let doccPluginDependencies: [Package.Dependency] = buildingDocs
     ? [.package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.0")]

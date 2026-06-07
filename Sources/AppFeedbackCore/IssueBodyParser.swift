@@ -259,10 +259,12 @@ extension IssueBodyParser {
         let numStr: String
         let unit: String
         if let sp = s.firstIndex(of: " ") {
-            numStr = String(s[..<sp])
+            // Trim the magnitude too (per the spec: the decimal grammar is checked
+            // *after* canonical trimming), so e.g. "4\t KB" matches like TS does.
+            numStr = String(s[..<sp]).trimmingCharacters(in: asciiWhitespace)
             unit = s[s.index(after: sp)...].trimmingCharacters(in: asciiWhitespace).uppercased()
         } else {
-            numStr = s
+            numStr = s.trimmingCharacters(in: asciiWhitespace)
             unit = "B"
         }
         if numStr.isEmpty { return nil }

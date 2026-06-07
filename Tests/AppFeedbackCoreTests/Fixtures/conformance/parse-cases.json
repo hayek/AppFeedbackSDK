@@ -102,6 +102,11 @@
       "expected": { "description": "Single space size.", "appName": "Acme", "appVersion": "1.0 (1)", "device": "Mac", "osVersion": "Version 15.1", "email": null, "attachments": [ { "filename": "data.bin", "mimeType": "application/octet-stream", "url": "https://example.com/data.bin", "sizeBytes": 4000 } ] }
     },
     {
+      "name": "attachment-size-magnitude-trailing-tab-trimmed",
+      "body": "Tab in size.\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 1.0 (1)\nDevice: Mac\nmacOS Version: Version 15.1\n\n<!-- attachments-v1 -->\n## Attachments\n\n[data.bin](https://example.com/data.bin) — application/octet-stream, 4\t KB\n\n<!-- /attachments-v1 -->\n\n---\n👍 Votes: 0",
+      "expected": { "description": "Tab in size.", "appName": "Acme", "appVersion": "1.0 (1)", "device": "Mac", "osVersion": "Version 15.1", "email": null, "attachments": [ { "filename": "data.bin", "mimeType": "application/octet-stream", "url": "https://example.com/data.bin", "sizeBytes": 4000 } ] }
+    },
+    {
       "name": "attachment-dotfile-segment-infers-png",
       "body": "Dotfile.\n\n---\n**Device Information:**\nApp: Acme\nApp Version: 1.0 (1)\nDevice: Mac\nmacOS Version: Version 15.1\n\n<!-- attachments-v1 -->\n## Attachments\n\n![.png](https://example.com/.png) —\n\n<!-- /attachments-v1 -->\n\n---\n👍 Votes: 0",
       "expected": { "description": "Dotfile.", "appName": "Acme", "appVersion": "1.0 (1)", "device": "Mac", "osVersion": "Version 15.1", "email": null, "attachments": [ { "filename": ".png", "mimeType": "image/png", "url": "https://example.com/.png", "sizeBytes": null } ] }
