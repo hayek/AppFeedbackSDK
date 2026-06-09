@@ -143,10 +143,10 @@ targets:
 
 **Hand-managed Xcode project:** File → Add Package Dependencies → Add Local… → select the `AppFeedbackSDK` directory → choose `AppFeedbackCore` and (optionally) `AppFeedbackUI`, link both to your app target.
 
-### Remote (when published)
+### Remote (Swift Package Manager)
 
 ```swift
-.package(url: "https://github.com/hayek/AppFeedbackSDK", branch: "main"),
+.package(url: "https://github.com/hayek/AppFeedbackSDK", from: "0.1.0"),
 ```
 
 ## Migrating an existing in-tree implementation
