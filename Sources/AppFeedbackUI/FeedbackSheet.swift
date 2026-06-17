@@ -631,14 +631,21 @@ public struct FeedbackSheet: View {
 
     private var missingFieldsMessage: String? {
         var missing: [String] = []
-        if title.isEmpty { missing.append(theme.copy.titleFieldName) }
-        if description.isEmpty { missing.append(theme.copy.descriptionFieldName) }
+        if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { missing.append(theme.copy.titleFieldName) }
+        if description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { missing.append(theme.copy.descriptionFieldName) }
         guard !missing.isEmpty else { return nil }
         return theme.copy.validationPrompt(forMissing: missing)
     }
 
     private func submit() {
-        if title.isEmpty || description.isEmpty {
+        // Trim so a whitespace-only title/description can't pass validation and
+        // a whitespace-only email doesn't emit a bogus "Contact Email" block;
+        // also keeps the submitted issue free of leading/trailing whitespace.
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedEmail = contactEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmedTitle.isEmpty || trimmedDescription.isEmpty {
             withAnimation { showValidationError = true }
             return
         }
@@ -649,9 +656,9 @@ public struct FeedbackSheet: View {
         }
         let report = FeedbackReport(
             type: selectedType,
-            title: title,
-            description: description,
-            contactEmail: contactEmail.isEmpty ? nil : contactEmail,
+            title: trimmedTitle,
+            description: trimmedDescription,
+            contactEmail: trimmedEmail.isEmpty ? nil : trimmedEmail,
             attachments: modeled
         )
 

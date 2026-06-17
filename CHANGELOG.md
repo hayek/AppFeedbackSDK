@@ -21,6 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   spec, adding the non-Apple names `Android`, `Windows`, `Linux`, `Web`, and
   `ChromeOS`.
 
+## [0.5.1] - 2026-06-17
+
+### Fixed
+
+- `FeedbackSheet` now trims leading/trailing whitespace from the title,
+  description, and contact email before validating and submitting. A
+  whitespace-only title/description no longer passes validation, and a
+  whitespace-only email no longer emits an empty `Contact Email` block in the
+  issue body.
+
 ## [0.5.0] - 2026-06-17
 
 ### Added
