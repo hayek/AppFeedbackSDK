@@ -21,6 +21,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   spec, adding the non-Apple names `Android`, `Windows`, `Linux`, `Web`, and
   `ChromeOS`.
 
+## [0.5.2] - 2026-06-17
+
+### Fixed
+
+- macOS drag-and-drop attachments now work. Dragged file URLs carry a transient
+  sandbox drag exception rather than a bookmark-based security scope, so
+  `startAccessingSecurityScopedResource()` returns `false` for them; the sheet
+  previously guarded on that and silently dropped every dragged file (the
+  file-importer path was unaffected). It now reads the file regardless and only
+  balances `stopAccessingSecurityScopedResource()` when access actually started.
+
 ## [0.5.1] - 2026-06-17
 
 ### Fixed

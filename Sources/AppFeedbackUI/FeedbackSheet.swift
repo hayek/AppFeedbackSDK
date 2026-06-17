@@ -733,8 +733,15 @@ public struct FeedbackSheet: View {
     private func ingest(urls: [URL]) {
         for url in urls {
             guard pendingAttachments.count < 3 else { break }
-            guard url.startAccessingSecurityScopedResource() else { continue }
-            defer { url.stopAccessingSecurityScopedResource() }
+            // File-importer URLs are bookmark-based security-scoped URLs, so
+            // `startAccessingSecurityScopedResource()` returns true and must be
+            // balanced. Drag-and-dropped URLs instead carry a transient sandbox
+            // drag exception and are NOT security-scoped, so the same call
+            // returns false even though the file is readable — guarding on it
+            // silently dropped every drag. Attempt access, read regardless, and
+            // only stop accessing when we actually started.
+            let didStartScope = url.startAccessingSecurityScopedResource()
+            defer { if didStartScope { url.stopAccessingSecurityScopedResource() } }
             guard let data = try? Data(contentsOf: url) else { continue }
             let mime = mimeType(for: url)
             let thumb: PlatformImage? = mime.hasPrefix("image/") ? PlatformImage(data: data) : nil
