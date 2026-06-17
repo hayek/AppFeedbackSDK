@@ -53,6 +53,7 @@ public struct FeedbackSheet: View {
     private let descriptionLimit: Int
     private let onSubmit: @MainActor (Int) -> Void
     private let onError: @MainActor (any Error) -> Void
+    private let onSubmitReport: (@MainActor (FeedbackReport, Int) -> Void)?
 
     @State private var title = ""
     @State private var description = ""
@@ -92,18 +93,25 @@ public struct FeedbackSheet: View {
     ///   - onError: Called on the main actor when the transport throws. The
     ///     sheet also displays an alert with `error.localizedDescription`,
     ///     so this callback is mainly for analytics / logging.
+    ///   - onSubmitReport: Optional. Called on the main actor after a
+    ///     successful submission with the full ``FeedbackReport`` (including
+    ///     its ``FeedbackType``) and the backend identifier. Use this when
+    ///     `onSubmit`'s issue number alone is not enough — e.g. to log which
+    ///     feedback type was submitted. Fires alongside `onSubmit`.
     public init(
         client: FeedbackClient,
         theme: FeedbackTheme = .default,
         descriptionLimit: Int = 1000,
         onSubmit: @escaping @MainActor (Int) -> Void = { _ in },
-        onError: @escaping @MainActor (any Error) -> Void = { _ in }
+        onError: @escaping @MainActor (any Error) -> Void = { _ in },
+        onSubmitReport: (@MainActor (FeedbackReport, Int) -> Void)? = nil
     ) {
         self.client = client
         self.theme = theme
         self.descriptionLimit = descriptionLimit
         self.onSubmit = onSubmit
         self.onError = onError
+        self.onSubmitReport = onSubmitReport
     }
 
     public var body: some View {
@@ -149,6 +157,7 @@ public struct FeedbackSheet: View {
     private struct TypeStyle {
         let icon: String
         let accent: Color
+        let gradient: [Color]
         let label: String
         let tagline: String
         let subtitle: String
@@ -160,6 +169,7 @@ public struct FeedbackSheet: View {
             return TypeStyle(
                 icon: "ant.fill",
                 accent: theme.bugAccent,
+                gradient: theme.bugGradient ?? [theme.bugAccent, theme.bugAccent.opacity(0.55)],
                 label: theme.copy.bugLabel,
                 tagline: theme.copy.bugTagline,
                 subtitle: theme.copy.bugSubtitle
@@ -168,6 +178,7 @@ public struct FeedbackSheet: View {
             return TypeStyle(
                 icon: "sparkles",
                 accent: theme.featureAccent,
+                gradient: theme.featureGradient ?? [theme.featureAccent, theme.featureAccent.opacity(0.55)],
                 label: theme.copy.featureLabel,
                 tagline: theme.copy.featureTagline,
                 subtitle: theme.copy.featureSubtitle
@@ -178,9 +189,8 @@ public struct FeedbackSheet: View {
     private var selectedStyle: TypeStyle { style(for: selectedType) }
 
     private var heroGradient: LinearGradient {
-        let accent = selectedStyle.accent
-        return LinearGradient(
-            colors: [accent, accent.opacity(0.55)],
+        LinearGradient(
+            colors: selectedStyle.gradient,
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -657,6 +667,7 @@ public struct FeedbackSheet: View {
                     submittedIssueNumber = issueNumber
                 }
                 onSubmit(issueNumber)
+                onSubmitReport?(report, issueNumber)
             } catch {
                 isSubmitting = false
                 errorMessage = error.localizedDescription

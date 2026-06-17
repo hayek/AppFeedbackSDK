@@ -27,13 +27,32 @@ public struct FeedbackTheme: Sendable {
     /// Accent color used when the user selects "Feature request".
     public var featureAccent: Color
 
+    /// Optional explicit gradient stops for the **bug** hero tile, ambient
+    /// background glow, and success ring. When `nil`, a gradient is derived
+    /// from ``bugAccent`` (`[bugAccent, bugAccent.opacity(0.55)]`), preserving
+    /// the previous default look. Supply two (or more) stops for a richer
+    /// multi-hue gradient.
+    public var bugGradient: [Color]?
+
+    /// Optional explicit gradient stops for the **feature** hero tile / ring.
+    /// When `nil`, derived from ``featureAccent``.
+    public var featureGradient: [Color]?
+
     /// All visible text on the sheet. See ``Copy`` for the full field list.
     public var copy: Copy
 
     /// Builds a theme.
-    public init(bugAccent: Color, featureAccent: Color, copy: Copy) {
+    public init(
+        bugAccent: Color,
+        featureAccent: Color,
+        bugGradient: [Color]? = nil,
+        featureGradient: [Color]? = nil,
+        copy: Copy
+    ) {
         self.bugAccent = bugAccent
         self.featureAccent = featureAccent
+        self.bugGradient = bugGradient
+        self.featureGradient = featureGradient
         self.copy = copy
     }
 
