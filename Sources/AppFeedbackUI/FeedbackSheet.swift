@@ -51,6 +51,7 @@ public struct FeedbackSheet: View {
     private let client: FeedbackClient
     private let theme: FeedbackTheme
     private let descriptionLimit: Int
+    private let extraFields: [String: String]
     private let onSubmit: @MainActor (Int) -> Void
     private let onError: @MainActor (any Error) -> Void
     private let onSubmitReport: (@MainActor (FeedbackReport, Int) -> Void)?
@@ -102,6 +103,7 @@ public struct FeedbackSheet: View {
         client: FeedbackClient,
         theme: FeedbackTheme = .default,
         descriptionLimit: Int = 1000,
+        extraFields: [String: String] = [:],
         onSubmit: @escaping @MainActor (Int) -> Void = { _ in },
         onError: @escaping @MainActor (any Error) -> Void = { _ in },
         onSubmitReport: (@MainActor (FeedbackReport, Int) -> Void)? = nil
@@ -109,6 +111,7 @@ public struct FeedbackSheet: View {
         self.client = client
         self.theme = theme
         self.descriptionLimit = descriptionLimit
+        self.extraFields = extraFields
         self.onSubmit = onSubmit
         self.onError = onError
         self.onSubmitReport = onSubmitReport
@@ -637,6 +640,21 @@ public struct FeedbackSheet: View {
         return theme.copy.validationPrompt(forMissing: missing)
     }
 
+    /// Builds the ``FeedbackReport`` submitted by ``submit()``. Pulled out as a
+    /// `static` helper so the email-trimming/nil-coalescing and `extraFields`
+    /// forwarding can be unit-tested without standing up the SwiftUI view.
+    static func makeReport(
+        type: FeedbackType, title: String, description: String,
+        contactEmail: String, attachments: [FeedbackAttachment], extraFields: [String: String]
+    ) -> FeedbackReport {
+        let trimmedEmail = contactEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        return FeedbackReport(
+            type: type, title: title, description: description,
+            contactEmail: trimmedEmail.isEmpty ? nil : trimmedEmail,
+            extraFields: extraFields, attachments: attachments
+        )
+    }
+
     private func submit() {
         // Trim so a whitespace-only title/description can't pass validation and
         // a whitespace-only email doesn't emit a bogus "Contact Email" block;
@@ -654,12 +672,13 @@ public struct FeedbackSheet: View {
         let modeled = pendingAttachments.map {
             FeedbackAttachment(filename: $0.filename, mimeType: $0.mimeType, data: $0.data)
         }
-        let report = FeedbackReport(
+        let report = Self.makeReport(
             type: selectedType,
             title: trimmedTitle,
             description: trimmedDescription,
-            contactEmail: trimmedEmail.isEmpty ? nil : trimmedEmail,
-            attachments: modeled
+            contactEmail: trimmedEmail,
+            attachments: modeled,
+            extraFields: extraFields
         )
 
         Task { @MainActor in
