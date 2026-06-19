@@ -101,4 +101,31 @@ public enum IssueBodyFormatter {
     public static func labels(for type: FeedbackType) -> [String] {
         [type.rawValue, userSubmittedLabel]
     }
+
+    /// Renders the machine-readable `source-meta-v1` block that carries a
+    /// synthesized issue's origin through GitHub and back into ``IssueBodyParser``.
+    /// Emits one `key: value` line per non-nil field (always at least `source`).
+    /// The block is HTML-comment-fenced so it's invisible in rendered Markdown.
+    ///
+    /// - Parameter source: the feedback source raw value ("sdk" | "app-store" | "email").
+    public static func sourceMetadataBlock(
+        source: String,
+        rating: Int? = nil,
+        reviewerNickname: String? = nil,
+        territory: String? = nil,
+        reviewId: String? = nil,
+        reviewCreatedAt: String? = nil,
+        fromAddress: String? = nil,
+        messageId: String? = nil
+    ) -> String {
+        var lines = ["\(BodyMarker.sourceKey): \(source)"]
+        if let rating { lines.append("\(BodyMarker.ratingKey): \(rating)") }
+        if let reviewerNickname { lines.append("\(BodyMarker.reviewerNicknameKey): \(reviewerNickname)") }
+        if let territory { lines.append("\(BodyMarker.territoryKey): \(territory)") }
+        if let reviewId { lines.append("\(BodyMarker.reviewIdKey): \(reviewId)") }
+        if let reviewCreatedAt { lines.append("\(BodyMarker.reviewCreatedAtKey): \(reviewCreatedAt)") }
+        if let fromAddress { lines.append("\(BodyMarker.fromAddressKey): \(fromAddress)") }
+        if let messageId { lines.append("\(BodyMarker.messageIdKey): \(messageId)") }
+        return "\(BodyMarker.sourceMetaOpen)\n" + lines.joined(separator: "\n") + "\n\(BodyMarker.sourceMetaClose)"
+    }
 }

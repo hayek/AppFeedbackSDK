@@ -196,9 +196,12 @@ public enum IssueBodyParser {
             }
         }
 
-        result.description = descLines
+        // Strip the source-meta-v1 block lines from the description so the
+        // HTML-comment block doesn't bleed into the visible user text.
+        let descRaw = descLines
             .filter { $0.trimmingCharacters(in: asciiWhitespace) != BodyMarker.horizontalRule }
             .joined(separator: "\n")
+        result.description = stripSourceMetaBlock(from: descRaw)
             .trimmingCharacters(in: asciiWhitespace)
 
         result.attachments = parseAttachments(in: normalized)
@@ -267,6 +270,17 @@ private func parseAttachmentLine(_ line: String) -> ParsedAttachment? {
     let resolvedMime = mime ?? IssueBodyParser.inferMimeFromURL(urlString)
 
     return ParsedAttachment(filename: filename, mimeType: resolvedMime, url: url, sizeBytes: size)
+}
+
+/// Removes the `source-meta-v1` HTML-comment block from a string so it doesn't
+/// appear in the description field. Mirrors the attachments-v1 block behaviour.
+private func stripSourceMetaBlock(from raw: String) -> String {
+    guard let openRange = raw.range(of: BodyMarker.sourceMetaOpen) else { return raw }
+    let afterOpen = openRange.upperBound
+    let closeRange = raw.range(of: BodyMarker.sourceMetaClose, range: afterOpen..<raw.endIndex)
+    let endOfBlock = closeRange.map { raw.index($0.upperBound, offsetBy: 0) } ?? raw.endIndex
+    // Remove from the open fence through the close fence (inclusive).
+    return (String(raw[..<openRange.lowerBound]) + String(raw[endOfBlock...]))
 }
 
 private func applySourceMetadata(in raw: String, to result: inout ParsedFeedbackBody) {
