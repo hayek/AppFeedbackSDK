@@ -19,6 +19,24 @@ enum BodyMarker {
     static let attachmentsClose = "<!-- /attachments-v1 -->"
     static let attachmentsHeader = "## Attachments"
 
+    /// HTML-comment fences wrapping the machine-readable source metadata block.
+    /// Mirrors the attachments-v1 block: invisible in rendered Markdown, survives
+    /// the GitHub round-trip, and is parsed back by ``IssueBodyParser``. Each line
+    /// inside is `key: value` using the `*Key` constants below.
+    static let sourceMetaOpen = "<!-- source-meta-v1 -->"
+    static let sourceMetaClose = "<!-- /source-meta-v1 -->"
+
+    /// Keys written inside the `source-meta-v1` block, one `key: value` per line.
+    /// `source` is always present; the rest are populated per source type.
+    static let sourceKey = "source"
+    static let ratingKey = "rating"
+    static let reviewerNicknameKey = "reviewerNickname"
+    static let territoryKey = "territory"
+    static let reviewIdKey = "reviewId"
+    static let reviewCreatedAtKey = "reviewCreatedAt"
+    static let fromAddressKey = "fromAddress"
+    static let messageIdKey = "messageId"
+
     /// OS names recognised in the `<osName> Version:` line, written by
     /// ``DeviceInfo/renderForIssueBody()`` and read by ``IssueBodyParser/parse(_:)``.
     static let recognisedOSNames = [
