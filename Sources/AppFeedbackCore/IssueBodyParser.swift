@@ -59,6 +59,19 @@ public struct ParsedFeedbackBody: Sendable, Equatable {
     /// Empty when no block is present or the block contains no valid entries.
     public var attachments: [ParsedAttachment] = []
 
+    /// Machine-readable source metadata from the `source-meta-v1` block.
+    /// `source` is the originating feedback source ("sdk" | "app-store" | "email");
+    /// nil when the block is absent (legacy SDK issues) — callers default to "sdk".
+    public var source: String?
+    /// App Store star rating (1…5) when `source == "app-store"`, else nil.
+    public var rating: Int?
+    public var reviewerNickname: String?
+    public var territory: String?
+    public var reviewId: String?
+    public var reviewCreatedAt: String?
+    public var fromAddress: String?
+    public var messageId: String?
+
     /// Builds a parsed result with every field specified. Mostly useful for
     /// tests; production code calls ``IssueBodyParser/parse(_:)``.
     public init(
@@ -68,7 +81,15 @@ public struct ParsedFeedbackBody: Sendable, Equatable {
         device: String? = nil,
         osVersion: String? = nil,
         email: String? = nil,
-        attachments: [ParsedAttachment] = []
+        attachments: [ParsedAttachment] = [],
+        source: String? = nil,
+        rating: Int? = nil,
+        reviewerNickname: String? = nil,
+        territory: String? = nil,
+        reviewId: String? = nil,
+        reviewCreatedAt: String? = nil,
+        fromAddress: String? = nil,
+        messageId: String? = nil
     ) {
         self.description = description
         self.appName = appName
@@ -77,6 +98,14 @@ public struct ParsedFeedbackBody: Sendable, Equatable {
         self.osVersion = osVersion
         self.email = email
         self.attachments = attachments
+        self.source = source
+        self.rating = rating
+        self.reviewerNickname = reviewerNickname
+        self.territory = territory
+        self.reviewId = reviewId
+        self.reviewCreatedAt = reviewCreatedAt
+        self.fromAddress = fromAddress
+        self.messageId = messageId
     }
 }
 
@@ -173,6 +202,7 @@ public enum IssueBodyParser {
             .trimmingCharacters(in: asciiWhitespace)
 
         result.attachments = parseAttachments(in: normalized)
+        applySourceMetadata(in: normalized, to: &result)
         return result
     }
 
@@ -237,6 +267,32 @@ private func parseAttachmentLine(_ line: String) -> ParsedAttachment? {
     let resolvedMime = mime ?? IssueBodyParser.inferMimeFromURL(urlString)
 
     return ParsedAttachment(filename: filename, mimeType: resolvedMime, url: url, sizeBytes: size)
+}
+
+private func applySourceMetadata(in raw: String, to result: inout ParsedFeedbackBody) {
+    guard let openRange = raw.range(of: BodyMarker.sourceMetaOpen) else { return }
+    let afterOpen = openRange.upperBound
+    let end = raw.range(of: BodyMarker.sourceMetaClose, range: afterOpen..<raw.endIndex)?.lowerBound ?? raw.endIndex
+    let block = raw[afterOpen..<end]
+
+    for rawLine in block.split(separator: "\n", omittingEmptySubsequences: true) {
+        let line = rawLine.trimmingCharacters(in: asciiWhitespace)
+        guard let colon = line.firstIndex(of: ":") else { continue }
+        let key = String(line[..<colon]).trimmingCharacters(in: asciiWhitespace)
+        let value = String(line[line.index(after: colon)...]).trimmingCharacters(in: asciiWhitespace)
+        guard !value.isEmpty else { continue }
+        switch key {
+        case BodyMarker.sourceKey:            result.source = value
+        case BodyMarker.ratingKey:            result.rating = Int(value)
+        case BodyMarker.reviewerNicknameKey:  result.reviewerNickname = value
+        case BodyMarker.territoryKey:         result.territory = value
+        case BodyMarker.reviewIdKey:          result.reviewId = value
+        case BodyMarker.reviewCreatedAtKey:   result.reviewCreatedAt = value
+        case BodyMarker.fromAddressKey:       result.fromAddress = value
+        case BodyMarker.messageIdKey:         result.messageId = value
+        default:                              break
+        }
+    }
 }
 
 extension IssueBodyParser {
