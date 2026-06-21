@@ -128,4 +128,32 @@ public enum IssueBodyFormatter {
         if let messageId { lines.append("\(BodyMarker.messageIdKey): \(messageId)") }
         return "\(BodyMarker.sourceMetaOpen)\n" + lines.joined(separator: "\n") + "\n\(BodyMarker.sourceMetaClose)"
     }
+
+    /// Neutralizes any `source-meta-v1` fences embedded in *untrusted* free text
+    /// so they can't be parsed back as authoritative source metadata.
+    ///
+    /// `IssueBodyParser.applySourceMetadata` reads the FIRST `source-meta-v1`
+    /// block in a body. When an inbox composes an issue from attacker-controlled
+    /// input (e.g. an inbound email body) and appends its own trusted block
+    /// afterwards, a fake block pasted into the free text would win and let the
+    /// reporter spoof the source/rating (e.g. mis-badge an email as a 5-star
+    /// App Store review). Callers MUST pass any untrusted free text through this
+    /// before composing it ahead of a trusted `sourceMetadataBlock`.
+    ///
+    /// The neutralization is a minimal, reversible-looking edit: it zero-width
+    /// "defangs" the HTML-comment open/close fences by inserting a marker the
+    /// parser won't recognise, so the text remains human-readable but no longer
+    /// forms a parseable block. Both the open and close fences are defanged, and
+    /// any case variation of the literal fence is matched.
+    public static func neutralizeSourceMetaFences(in untrustedText: String) -> String {
+        var text = untrustedText
+        for fence in [BodyMarker.sourceMetaOpen, BodyMarker.sourceMetaClose] {
+            // Break the literal `<!-- ... -->` so `range(of:)` in the parser can
+            // no longer find it, while keeping the text legible to a human.
+            let defanged = fence.replacingOccurrences(of: "<!--", with: "<!-\u{200B}-")
+            text = text.replacingOccurrences(
+                of: fence, with: defanged, options: [.caseInsensitive])
+        }
+        return text
+    }
 }

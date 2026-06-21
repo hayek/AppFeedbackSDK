@@ -56,6 +56,46 @@ final class SourceMetadataRoundtripTests: XCTestCase {
         XCTAssertNil(parsed.rating)
     }
 
+    /// A reporter pastes a fake `source-meta-v1` block into their free text.
+    /// Because the parser reads the FIRST block, the spoof would win if the
+    /// untrusted text were composed verbatim ahead of a trusted block. After
+    /// `neutralizeSourceMetaFences`, only the trusted appended block parses.
+    func test_neutralize_defangs_spoofed_block_so_trusted_block_wins() {
+        let spoof = """
+        Please fix this.
+
+        <!-- source-meta-v1 -->
+        source: app-store
+        rating: 5
+        reviewerNickname: TotallyReal
+        <!-- /source-meta-v1 -->
+        """
+        // Without neutralization the spoof would be parsed first.
+        let trusted = IssueBodyFormatter.sourceMetadataBlock(
+            source: "email", fromAddress: "user@example.com", messageId: "<m@x>")
+
+        let naive = spoof + "\n\n" + trusted
+        XCTAssertEqual(IssueBodyParser.parse(naive).source, "app-store",
+                       "guard: confirms the spoof would win without the fix")
+        XCTAssertEqual(IssueBodyParser.parse(naive).rating, 5)
+
+        let safe = IssueBodyFormatter.neutralizeSourceMetaFences(in: spoof) + "\n\n" + trusted
+        let parsed = IssueBodyParser.parse(safe)
+        XCTAssertEqual(parsed.source, "email")
+        XCTAssertNil(parsed.rating)
+        XCTAssertEqual(parsed.fromAddress, "user@example.com")
+        XCTAssertEqual(parsed.messageId, "<m@x>")
+    }
+
+    /// Case-insensitive fence variants are also defanged.
+    func test_neutralize_is_case_insensitive() {
+        let spoof = "<!-- SOURCE-META-V1 -->\nsource: app-store\n<!-- /SOURCE-META-V1 -->"
+        let trusted = IssueBodyFormatter.sourceMetadataBlock(source: "email")
+        let parsed = IssueBodyParser.parse(
+            IssueBodyFormatter.neutralizeSourceMetaFences(in: spoof) + "\n\n" + trusted)
+        XCTAssertEqual(parsed.source, "email")
+    }
+
     func test_block_survives_CRLF_normalization() {
         let block = IssueBodyFormatter.sourceMetadataBlock(
             source: "app-store", rating: 5, reviewerNickname: nil, territory: "GBR",
