@@ -20,9 +20,9 @@ enum BodyMarker {
     static let attachmentsHeader = "## Attachments"
 
     /// HTML-comment fences wrapping the machine-readable source metadata block.
-    /// Mirrors the attachments-v1 block: invisible in rendered Markdown, survives
-    /// the GitHub round-trip, and is parsed back by ``IssueBodyParser``. Each line
-    /// inside is `key: value` using the `*Key` constants below.
+    /// The fence lines themselves are HTML comments, but the `key: value` content
+    /// lines inside render visibly in the issue body (like the device-info block).
+    /// The block survives the GitHub round-trip and is parsed back by ``IssueBodyParser``.
     static let sourceMetaOpen = "<!-- source-meta-v1 -->"
     static let sourceMetaClose = "<!-- /source-meta-v1 -->"
 

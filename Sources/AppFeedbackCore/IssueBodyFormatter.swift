@@ -105,7 +105,8 @@ public enum IssueBodyFormatter {
     /// Renders the machine-readable `source-meta-v1` block that carries a
     /// synthesized issue's origin through GitHub and back into ``IssueBodyParser``.
     /// Emits one `key: value` line per non-nil field (always at least `source`).
-    /// The block is HTML-comment-fenced so it's invisible in rendered Markdown.
+    /// The opening and closing fence lines are HTML comments, but the `key: value`
+    /// content lines render visibly in the issue body (like the device-info block).
     ///
     /// - Parameter source: the feedback source raw value ("sdk" | "app-store" | "email").
     public static func sourceMetadataBlock(
