@@ -275,54 +275,25 @@ public struct FeedbackSheet: View {
             typeCard(for: .bug)
             typeCard(for: .featureRequest)
         }
+        // Sizes the row to the taller card; each card then fills that height, so copy
+        // long enough to wrap in one card no longer leaves the other short.
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func typeCard(for type: FeedbackType) -> some View {
         let s = style(for: type)
-        let isSelected = selectedType == type
-
-        return Button {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
-                selectedType = type
-            }
-        } label: {
-            HStack(spacing: 11) {
-                Image(systemName: s.icon)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(isSelected ? .white : s.accent)
-                    .frame(width: 32, height: 32)
-                    .background(
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .fill(isSelected ? s.accent : s.accent.opacity(0.12))
-                    )
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(s.label)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.primary)
-                    Text(s.tagline)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+        return FeedbackTypeCard(
+            icon: s.icon,
+            accent: s.accent,
+            label: s.label,
+            tagline: s.tagline,
+            isSelected: selectedType == type,
+            action: {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
+                    selectedType = type
                 }
-                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(PlatformColor.controlBackground.opacity(isSelected ? 1.0 : 0.5))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(
-                        isSelected ? s.accent.opacity(0.55) : PlatformColor.separator.opacity(0.6),
-                        lineWidth: isSelected ? 1.5 : 1
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-        .contentShape(Rectangle())
+        )
     }
 
     // MARK: - Field cards

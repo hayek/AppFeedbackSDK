@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [0.6.1] - 2026-08-24
+
+### Fixed
+
+- The two feedback-type cards no longer end up different sizes with truncated
+  taglines. Their copy is themable, so the tiles can't assume the defaults'
+  length — an adopter's "Bug / Issue" is wider than "Bug", and a localized
+  string wider still. Label and tagline had `lineLimit(1)` and each card sized
+  to its own content, so longer copy ellipsized and the card whose label wrapped
+  grew taller than its neighbour. Both texts now wrap, and the row sizes to its
+  tallest card with each card filling that height and an equal share of the
+  width.
+
 ## [0.6.0] - 2026-08-24
 
 ### Added
