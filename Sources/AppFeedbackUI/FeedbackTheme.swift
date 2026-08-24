@@ -142,6 +142,12 @@ public struct FeedbackTheme: Sendable {
         /// Section label above the attachments row.
         public var attachmentsLabel: String
 
+        /// iOS only: "attach from the camera roll" item in the Add menu.
+        public var attachPhotoLibraryLabel: String
+
+        /// iOS only: "attach from Files" item in the Add menu.
+        public var attachFilesLabel: String
+
         /// Alert title used when the transport throws.
         public var errorAlertTitle: String
 
@@ -171,6 +177,8 @@ public struct FeedbackTheme: Sendable {
             emailHint: String,
             privacyNotice: String,
             attachmentsLabel: String = "Attachments",
+            attachPhotoLibraryLabel: String = "Photo Library",
+            attachFilesLabel: String = "Files\u{2026}",
             submitButton: String,
             doneButton: String,
             successTitle: String,
@@ -197,6 +205,8 @@ public struct FeedbackTheme: Sendable {
             self.emailHint = emailHint
             self.privacyNotice = privacyNotice
             self.attachmentsLabel = attachmentsLabel
+            self.attachPhotoLibraryLabel = attachPhotoLibraryLabel
+            self.attachFilesLabel = attachFilesLabel
             self.submitButton = submitButton
             self.doneButton = doneButton
             self.successTitle = successTitle
@@ -226,6 +236,8 @@ public struct FeedbackTheme: Sendable {
             emailHint: "So we can reach out for more details",
             privacyNotice: "Device information will be automatically included",
             attachmentsLabel: "Attachments",
+            attachPhotoLibraryLabel: "Photo Library",
+            attachFilesLabel: "Files\u{2026}",
             submitButton: "Submit",
             doneButton: "Done",
             successTitle: "Thanks!",

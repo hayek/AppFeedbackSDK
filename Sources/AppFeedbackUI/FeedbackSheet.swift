@@ -9,6 +9,9 @@ typealias PlatformImage = NSImage
 import UIKit
 typealias PlatformImage = UIImage
 #endif
+#if os(iOS)
+import PhotosUI
+#endif
 
 /// A drop-in feedback form, presentable from any SwiftUI view via `.sheet(...)`.
 ///
@@ -63,6 +66,10 @@ public struct FeedbackSheet: View {
     @State private var attachmentError: String?
     @State private var isDragTargeted: Bool = false
     @State private var showFileImporter = false
+    #if os(iOS)
+    @State private var showPhotoPicker = false
+    @State private var photoPicks: [PhotosPickerItem] = []
+    #endif
     @State private var selectedType: FeedbackType = .bug
 
     @State private var isSubmitting = false
@@ -437,16 +444,7 @@ public struct FeedbackSheet: View {
             HStack {
                 sectionLabel(theme.copy.attachmentsLabel, icon: "paperclip")
                 Spacer()
-                Button {
-                    showFileImporter = true
-                } label: {
-                    Label("Add", systemImage: "plus")
-                        .font(.system(size: 12, weight: .semibold))
-                        .labelStyle(.titleAndIcon)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(pendingAttachments.count >= 3)
+                addAttachmentControl
             }
             if !pendingAttachments.isEmpty {
                 attachmentStrip
@@ -466,6 +464,69 @@ public struct FeedbackSheet: View {
                 ingest(urls: urls)
             }
         }
+        #if os(iOS)
+        // `.current` keeps each pick in its own format, so the MIME derived from
+        // `supportedContentTypes` matches the bytes. HEIC→JPEG then happens in one
+        // predictable place — `ImagePreprocessor`, on the submit path — which also
+        // strips the GPS tags a camera-roll photo carries.
+        .photosPicker(
+            isPresented: $showPhotoPicker,
+            selection: $photoPicks,
+            maxSelectionCount: freeAttachmentSlots,
+            matching: .images,
+            preferredItemEncoding: .current
+        )
+        .onChange(of: photoPicks) { _, picks in
+            guard !picks.isEmpty else { return }
+            Task { await ingest(picks: picks) }
+        }
+        #endif
+    }
+
+    /// Both pickers cap their own selection at what the sheet can still hold, so a pick
+    /// can't silently overshoot the 3-attachment limit.
+    private var freeAttachmentSlots: Int {
+        max(0, FeedbackAttachmentValidator.maxCount - pendingAttachments.count)
+    }
+
+    /// On iOS the Add button opens a source menu — the file importer can't reach the
+    /// camera roll, which is where a screenshot lives, and the photo picker can't reach
+    /// iCloud Drive. Every other platform has one source, so it opens the importer
+    /// directly rather than growing a one-item menu.
+    @ViewBuilder
+    private var addAttachmentControl: some View {
+        #if os(iOS)
+        Menu {
+            Button {
+                showPhotoPicker = true
+            } label: {
+                Label(theme.copy.attachPhotoLibraryLabel, systemImage: "photo.on.rectangle")
+            }
+            Button {
+                showFileImporter = true
+            } label: {
+                Label(theme.copy.attachFilesLabel, systemImage: "folder")
+            }
+        } label: {
+            Label("Add", systemImage: "plus")
+                .font(.system(size: 12, weight: .semibold))
+                .labelStyle(.titleAndIcon)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .disabled(freeAttachmentSlots == 0)
+        #else
+        Button {
+            showFileImporter = true
+        } label: {
+            Label("Add", systemImage: "plus")
+                .font(.system(size: 12, weight: .semibold))
+                .labelStyle(.titleAndIcon)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .disabled(freeAttachmentSlots == 0)
+        #endif
     }
 
     private var attachmentStrip: some View {
@@ -751,7 +812,7 @@ public struct FeedbackSheet: View {
 
     private func ingest(urls: [URL]) {
         for url in urls {
-            guard pendingAttachments.count < 3 else { break }
+            guard pendingAttachments.count < FeedbackAttachmentValidator.maxCount else { break }
             // File-importer URLs are bookmark-based security-scoped URLs, so
             // `startAccessingSecurityScopedResource()` returns true and must be
             // balanced. Drag-and-dropped URLs instead carry a transient sandbox
@@ -773,6 +834,46 @@ public struct FeedbackSheet: View {
         }
         revalidate()
     }
+
+    #if os(iOS)
+    /// Loads each pick's bytes in order, naming as it goes so names stay unique across
+    /// the batch. Unlike `ingest(urls:)` these bytes aren't preprocessed here — the
+    /// submit path runs `ImagePreprocessor` for every attachment, so EXIF/GPS stripping
+    /// and HEIC→JPEG happen once, in one place.
+    private func ingest(picks: [PhotosPickerItem]) async {
+        var used = Set(pendingAttachments.map(\.filename))
+        var dropped = 0
+        for pick in picks {
+            guard pendingAttachments.count < FeedbackAttachmentValidator.maxCount else { break }
+            guard let data = try? await pick.loadTransferable(type: Data.self) else {
+                // Named, not skipped: to someone who just tapped a photo, a silent drop
+                // reads as a broken button.
+                dropped += 1
+                continue
+            }
+            let descriptor = PhotoAttachmentNaming.descriptor(
+                for: pick.supportedContentTypes.first,
+                avoiding: used
+            )
+            used.insert(descriptor.filename)
+            pendingAttachments.append(PendingAttachmentUI(
+                filename: descriptor.filename,
+                mimeType: descriptor.mimeType,
+                data: data,
+                thumbnail: PlatformImage(data: data)
+            ))
+        }
+        revalidate()
+        // Set after revalidate, which would clear it. A validator complaint about what
+        // did land is the more actionable message, so it wins.
+        if dropped > 0, attachmentError == nil {
+            attachmentError = dropped == 1
+                ? "Couldn\u{2019}t load that photo."
+                : "Couldn\u{2019}t load \(dropped) photos."
+        }
+        photoPicks = []
+    }
+    #endif
 
     private func revalidate() {
         let modeled = pendingAttachments.map {

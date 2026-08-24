@@ -9,11 +9,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Fixed
+
+## [0.6.0] - 2026-08-24
+
+### Added
+
+- `FeedbackSheet` can attach photos from the camera roll on iOS. The Add button
+  now opens a source menu — Photo Library or Files — because the file importer
+  can't reach the photo library, which is where a screenshot lives. Picks are
+  named from their content type (`Photo.png`, `Photo-2.heic`): `PhotosPickerItem`
+  carries no filename, and reading the real one would require the full
+  photo-library authorization prompt that `PHPickerViewController` avoids. The
+  picker requests `.current` encoding so the MIME matches the bytes, leaving
+  HEIC→JPEG and EXIF/GPS stripping to `ImagePreprocessor` on the submit path.
+  Other platforms keep the single-source Add button.
+- `FeedbackTheme.Copy.attachPhotoLibraryLabel` / `attachFilesLabel` — localizable
+  names for the two iOS menu items. Both have defaults, so existing `Copy`
+  initializers keep compiling.
+- `FeedbackAttachmentValidator.maxCount` / `maxFileBytes` / `maxTotalBytes` are
+  now `public`, so a UI can cap its own picker at what the validator accepts
+  instead of duplicating the numbers.
+- `source-meta-v1` marker vocabulary, emitted by `IssueBodyFormatter` and parsed
+  back into `ParsedFeedbackBody`, with a formatter↔parser round-trip test.
+
+### Fixed
+
+- `IssueBodyParser` neutralizes spoofed `source-meta-v1` fences in untrusted
+  text, so a reporter can't forge source metadata by pasting a fence into their
+  own description.
+
+## [0.5.3] - 2026-06-17
+
+> Recorded retroactively: 0.5.3 was tagged without a changelog entry, and the
+> items below sat under "Unreleased" until the 0.6.0 release.
+
+### Added
+
 - `RelayTransport` — posts feedback to an adopter-operated relay (relay-contract
   wire-compatible with the Web/Android SDKs), with optional `captchaToken`
   forwarding.
-
-### Changed
 
 ### Fixed
 

@@ -6,9 +6,13 @@ import Foundation
 /// ``GitHubDirectTransport`` before any network I/O.
 public enum FeedbackAttachmentValidator {
 
-    static let maxCount = 3
-    static let maxFileBytes = 5 * 1024 * 1024
-    static let maxTotalBytes = 10 * 1024 * 1024
+    /// Maximum attachments per report. Public so a UI can cap its own picker at what
+    /// the validator will accept, rather than duplicating the number.
+    public static let maxCount = 3
+    /// Maximum size of any single attachment, in bytes.
+    public static let maxFileBytes = 5 * 1024 * 1024
+    /// Maximum combined size of all attachments on one report, in bytes.
+    public static let maxTotalBytes = 10 * 1024 * 1024
     static let allowedMimeTypes: Set<String> = [
         "image/png",
         "image/jpeg",
