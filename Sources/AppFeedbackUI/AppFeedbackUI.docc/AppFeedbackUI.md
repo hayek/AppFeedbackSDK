@@ -37,6 +37,21 @@ The default theme uses red for bug reports, blue/purple for feature requests, an
 - **Async submission** — disables the button, shows a spinner, fires `onSubmit` or `onError` callbacks.
 - **Success animation** — animated checkmark + the GitHub issue number, then dismiss via "Done".
 - **Keyboard shortcuts** — ⌘↩ submits on macOS / iPadOS, default action key dismisses on success.
+- **App Store rating prompt** — praise converts into a rating without leaving the app. See below.
+
+### App Store rating prompt
+
+When a submission turns out to be unqualified praise, the sheet follows it with the native App Store rating prompt. This is on by default; pass `requestsAppStoreReview: false` to ``FeedbackSheet/init(client:theme:descriptionLimit:extraFields:requestsAppStoreReview:onSubmit:onError:onSubmitReport:)`` to opt out.
+
+The praise check runs entirely on-device through Apple Intelligence (Foundation Models, iOS/macOS/visionOS 26+) — the text is never sent anywhere for it, and no app ID or other configuration is required. On a device without Apple Intelligence — an older OS, ineligible hardware, the feature switched off, or the model still downloading — the check is skipped and the flow behaves exactly as it did before the option existed.
+
+Three properties are worth relying on:
+
+- **The report always goes out first.** The check runs after the transport has returned, so a slow, erroring, or absent model cannot affect or delay a submission.
+- **The bar is pure praise.** Text mixing appreciation with a bug, complaint, criticism, question, or request does not qualify, and an uncertain verdict counts as not praise.
+- **Silence is the failure mode.** A guardrail trip, a refusal, an unsupported language, or a timeout all mean "no prompt", never a broken submission.
+
+The alert's copy and how often it appears belong to the system, so it is deliberately not part of ``FeedbackTheme/Copy``; the App Store shows it at most a few times per user per year. The option is inert on watchOS and tvOS, which have no rating prompt.
 
 ## Topics
 

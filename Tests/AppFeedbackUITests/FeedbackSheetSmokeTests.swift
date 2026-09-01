@@ -21,6 +21,23 @@ final class FeedbackSheetSmokeTests: XCTestCase {
         _ = sheet.body
     }
 
+    /// Guards the new init parameter and the platform `#if`s around it. This
+    /// asserts nothing about the prompt itself — evaluating `body` never runs
+    /// the `.task` closure, so the behavior lives in
+    /// `ReviewPromptCoordinatorTests`.
+    func test_sheet_instantiates_with_review_prompt_enabled_and_disabled() {
+        let client = FeedbackClient(
+            transport: NoOpTransport(),
+            deviceInfo: DeviceInfo(
+                appName: "AcmeApp", appVersion: "1.0", buildNumber: "1",
+                model: "Mac15,11", osName: "macOS",
+                osVersion: "Version 15.1 (Build 24B83)"
+            )
+        )
+        _ = FeedbackSheet(client: client, requestsAppStoreReview: true).body
+        _ = FeedbackSheet(client: client, requestsAppStoreReview: false).body
+    }
+
     func test_validation_template_substitutes_fields_locale_aware() {
         // Uses `ListFormatter.localizedString(byJoining:)` so the joiner is
         // locale-correct. In English the output is "Title and Description";

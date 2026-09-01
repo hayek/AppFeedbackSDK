@@ -9,6 +9,8 @@ Customize the accent colors and all visible copy via ``FeedbackTheme``.
 - **Two accent colors** — one for bug reports (``FeedbackTheme/bugAccent``) and one for feature requests (``FeedbackTheme/featureAccent``). These drive the hero gradient, type-selector highlights, success ring, and submit-button accents.
 - **All visible strings** — collected in ``FeedbackTheme/Copy`` so you can swap in pre-localized text without the SDK shipping a strings table.
 
+One thing the theme deliberately does not cover: the native App Store rating prompt that can follow a submission. Its copy, layout, and localization come from the system, so there is nothing for ``FeedbackTheme/Copy`` to override.
+
 ```swift
 FeedbackSheet(
     client: feedback,

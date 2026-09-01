@@ -46,6 +46,32 @@ let feedback = FeedbackClient(
 
 The sheet renders a hero header, bug/feature selector, validated form, success animation, and `Done` dismissal. All copy and accent colors come from `theme`.
 
+### App Store rating prompt
+
+When a submission turns out to be unqualified praise, the sheet follows it with
+the native App Store rating prompt, so a happy user can turn that praise into a
+rating without leaving the app. It's on by default:
+
+```swift
+FeedbackSheet(
+    client: feedback,
+    requestsAppStoreReview: false   // opt out
+)
+```
+
+The praise check runs entirely on-device through Apple Intelligence (Foundation
+Models, iOS/macOS/visionOS 26+) — the text is never sent anywhere for it. On a
+device without Apple Intelligence — older OS, ineligible hardware, the feature
+switched off, or the model still downloading — the check is skipped and the flow
+is exactly as it was before. No app ID or other configuration is needed.
+
+The report is always submitted first and is never affected by the outcome, and
+the bar is deliberately high: text that mixes praise with a bug, complaint,
+question, or request does not qualify. The alert's copy and how often it appears
+belong to the system, so it isn't part of `FeedbackTheme.Copy`, and the App Store
+shows it at most a few times per user per year. The option is inert on watchOS
+and tvOS, which have no rating prompt.
+
 ## Headless submission
 
 Skip the sheet if you have your own UI:

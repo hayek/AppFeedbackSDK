@@ -12,6 +12,11 @@ typealias PlatformImage = UIImage
 #if os(iOS)
 import PhotosUI
 #endif
+// Vends `RequestReviewAction` via the StoreKit↔SwiftUI cross-import overlay.
+// The action is unavailable on watchOS and tvOS, so it is gated everywhere.
+#if os(iOS) || os(macOS) || os(visionOS)
+import StoreKit
+#endif
 
 /// A drop-in feedback form, presentable from any SwiftUI view via `.sheet(...)`.
 ///
@@ -50,11 +55,15 @@ import PhotosUI
 public struct FeedbackSheet: View {
 
     @Environment(\.dismiss) private var dismiss
+    #if os(iOS) || os(macOS) || os(visionOS)
+    @Environment(\.requestReview) private var requestReview
+    #endif
 
     private let client: FeedbackClient
     private let theme: FeedbackTheme
     private let descriptionLimit: Int
     private let extraFields: [String: String]
+    private let requestsAppStoreReview: Bool
     private let onSubmit: @MainActor (Int) -> Void
     private let onError: @MainActor (any Error) -> Void
     private let onSubmitReport: (@MainActor (FeedbackReport, Int) -> Void)?
@@ -80,6 +89,11 @@ public struct FeedbackSheet: View {
     @State private var checkmarkScale: CGFloat = 0.4
     @State private var checkmarkOpacity: Double = 0
     @State private var successContentVisible = false
+    /// Set the instant Done is tapped. `.task` cancellation alone is too late
+    /// to suppress the rating prompt: SwiftUI tears a sheet's views down at the
+    /// *end* of the dismissal animation, leaving a window in which the task is
+    /// still live while the sheet is already sliding away.
+    @State private var isDismissing = false
 
     @FocusState private var focusedField: Field?
 
@@ -95,6 +109,23 @@ public struct FeedbackSheet: View {
     ///     label. The counter turns red over the limit but does **not**
     ///     block submission — enforce hard limits in your transport if
     ///     needed. Defaults to `1000`.
+    ///   - requestsAppStoreReview: When `true` (the default), a successful
+    ///     submission whose text is unqualified praise is followed by the
+    ///     native App Store rating prompt, so happy users can turn that praise
+    ///     into a rating without leaving the app.
+    ///
+    ///     The praise check runs entirely on-device via Apple Intelligence
+    ///     (Foundation Models, iOS/macOS/visionOS 26+). On any device without
+    ///     it — older OS, ineligible hardware, Apple Intelligence switched off,
+    ///     model still downloading — the check is skipped and the flow is
+    ///     exactly as it was before this option existed. The report is always
+    ///     submitted first and is never affected by the outcome; text that
+    ///     mixes praise with a bug, complaint, question, or request does not
+    ///     qualify. Inert on watchOS and tvOS, which have no rating prompt.
+    ///
+    ///     The alert's copy and its presentation frequency belong to the
+    ///     system — it is deliberately not part of ``FeedbackTheme/Copy``, and
+    ///     the App Store shows it at most a few times per user per year.
     ///   - onSubmit: Called on the main actor after a successful submission,
     ///     with the backend-assigned identifier (GitHub issue number for
     ///     ``GitHubDirectTransport``).
@@ -111,6 +142,7 @@ public struct FeedbackSheet: View {
         theme: FeedbackTheme = .default,
         descriptionLimit: Int = 1000,
         extraFields: [String: String] = [:],
+        requestsAppStoreReview: Bool = true,
         onSubmit: @escaping @MainActor (Int) -> Void = { _ in },
         onError: @escaping @MainActor (any Error) -> Void = { _ in },
         onSubmitReport: (@MainActor (FeedbackReport, Int) -> Void)? = nil
@@ -119,6 +151,7 @@ public struct FeedbackSheet: View {
         self.theme = theme
         self.descriptionLimit = descriptionLimit
         self.extraFields = extraFields
+        self.requestsAppStoreReview = requestsAppStoreReview
         self.onSubmit = onSubmit
         self.onError = onError
         self.onSubmitReport = onSubmitReport
@@ -638,7 +671,10 @@ public struct FeedbackSheet: View {
 
             Spacer()
 
-            Button(action: { dismiss() }) {
+            Button(action: {
+                isDismissing = true
+                dismiss()
+            }) {
                 Text(theme.copy.doneButton)
                     .font(.system(size: 13, weight: .semibold))
                     .frame(minWidth: 120)
@@ -660,6 +696,38 @@ public struct FeedbackSheet: View {
                 successContentVisible = true
             }
         }
+        // Attached to the success view, not to `submit()`, so it can only ever
+        // run after the report was delivered. SwiftUI also cancels it when the
+        // view is torn down, which covers a swipe-dismissal; the explicit
+        // `isDismissing` check covers the Done tap, where teardown lags the
+        // animation. Together they keep a system alert off a departing sheet.
+        .task {
+            #if os(iOS) || os(macOS) || os(visionOS)
+            guard requestsAppStoreReview else { return }
+            await ReviewPromptCoordinator().run(
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                description: description.trimmingCharacters(in: .whitespacesAndNewlines),
+                classifier: praiseClassifier,
+                presentReview: {
+                    guard !isDismissing else { return }
+                    requestReview()
+                }
+            )
+            #endif
+        }
+    }
+
+    /// The on-device classifier, or `nil` when Apple Intelligence cannot be
+    /// reached at all — an OS below 26, or a toolchain with no Foundation
+    /// Models SDK. A `nil` classifier short-circuits
+    /// ``ReviewPromptCoordinator`` into today's behavior.
+    private var praiseClassifier: (any PraiseClassifying)? {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, macOS 26.0, visionOS 26.0, *) {
+            return FoundationModelsPraiseClassifier()
+        }
+        #endif
+        return nil
     }
 
     // MARK: - Validation + submit

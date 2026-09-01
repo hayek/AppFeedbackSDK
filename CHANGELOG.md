@@ -13,6 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [0.7.0] - 2026-09-01
+
+### Added
+
+- `FeedbackSheet` follows a successful submission with the native App Store
+  rating prompt when the feedback is unqualified praise, via the new
+  `requestsAppStoreReview` parameter (default `true`). The praise check is
+  on-device Apple Intelligence (Foundation Models, iOS/macOS/visionOS 26+) using
+  guided generation over a three-case verdict, so an unparsable answer is
+  unrepresentable rather than merely unlikely; the bar is pure praise, and
+  anything mixing in a bug, complaint, question, or request is excluded. Every
+  other outcome — no Apple Intelligence, an unavailable or still-downloading
+  model, a guardrail trip, a refusal, an unsupported language, a timeout —
+  silently skips the prompt, reproducing the previous behavior exactly. The
+  report is submitted before any of this runs and is never affected by it. No
+  app ID or other configuration is required. Inert on watchOS and tvOS, which
+  have no rating prompt.
+
 ## [0.6.1] - 2026-08-24
 
 ### Fixed
