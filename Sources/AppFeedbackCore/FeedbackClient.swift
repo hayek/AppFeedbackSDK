@@ -9,7 +9,7 @@ import Foundation
 ///
 /// ## Two ways to construct
 ///
-/// The common case uses ``init(appName:transport:)``, which collects
+/// The common case uses ``init(appName:transport:analytics:)``, which collects
 /// ``DeviceInfo`` lazily on every submission:
 ///
 /// ```swift
@@ -20,7 +20,7 @@ import Foundation
 /// ```
 ///
 /// For tests or fully deterministic submissions, freeze a ``DeviceInfo``
-/// instance with ``init(transport:deviceInfo:)``:
+/// instance with ``init(transport:deviceInfo:analytics:)``:
 ///
 /// ```swift
 /// let feedback = FeedbackClient(
@@ -39,6 +39,11 @@ public struct FeedbackClient: Sendable {
     private let transport: any FeedbackTransport
     private let deviceInfoProvider: @Sendable () -> DeviceInfo
 
+    /// The optional analytics sink, also read by `AppFeedbackUI`'s sheet so the
+    /// whole funnel lands in one place. `package` rather than `public`: the UI
+    /// target needs it, adopters never do, and it stays out of the public API.
+    package let analytics: (any FeedbackAnalytics)?
+
     /// Builds a client that collects fresh ``DeviceInfo`` on every submission.
     ///
     /// - Parameters:
@@ -47,12 +52,18 @@ public struct FeedbackClient: Sendable {
     ///   - transport: Where reports get delivered. Use
     ///     ``GitHubDirectTransport`` to POST directly to GitHub Issues, or
     ///     conform to ``FeedbackTransport`` for a relay or mock.
+    ///   - analytics: Optional sink for ``FeedbackEvent``. Configure it here and
+    ///     nowhere else: `FeedbackSheet` reads it from the client,
+    ///     so one object receives the submission lifecycle *and* the UI funnel.
+    ///     Defaults to `nil`, which is a genuine no-op.
     public init(
         appName: String? = nil,
-        transport: any FeedbackTransport
+        transport: any FeedbackTransport,
+        analytics: (any FeedbackAnalytics)? = nil
     ) {
         self.transport = transport
         self.deviceInfoProvider = { DeviceInfo.current(appName: appName) }
+        self.analytics = analytics
     }
 
     /// Builds a client that uses a frozen ``DeviceInfo`` for every submission.
@@ -64,12 +75,16 @@ public struct FeedbackClient: Sendable {
     /// - Parameters:
     ///   - transport: Where reports get delivered.
     ///   - deviceInfo: The metadata block attached to every submission.
+    ///   - analytics: Optional sink for ``FeedbackEvent``. See
+    ///     ``init(appName:transport:analytics:)``.
     public init(
         transport: any FeedbackTransport,
-        deviceInfo: DeviceInfo
+        deviceInfo: DeviceInfo,
+        analytics: (any FeedbackAnalytics)? = nil
     ) {
         self.transport = transport
         self.deviceInfoProvider = { deviceInfo }
+        self.analytics = analytics
     }
 
     /// Submits a report and returns the backend-assigned identifier.
@@ -85,6 +100,20 @@ public struct FeedbackClient: Sendable {
     ///   ``GitHubDirectTransport``, or whatever the active transport throws.
     @discardableResult
     public func submit(_ report: FeedbackReport) async throws -> Int {
-        try await transport.submit(report, deviceInfo: deviceInfoProvider())
+        // The client is the sole emitter of submission events; the sheet never
+        // re-emits them, so a submission can't be counted twice.
+        analytics?.record(.submissionStarted(
+            report.type,
+            attachmentCount: report.attachments.count,
+            hasContactEmail: report.contactEmail != nil
+        ))
+        do {
+            let issueNumber = try await transport.submit(report, deviceInfo: deviceInfoProvider())
+            analytics?.record(.submissionSucceeded(report.type, issueNumber: issueNumber))
+            return issueNumber
+        } catch {
+            analytics?.record(.submissionFailed(report.type, error: error))
+            throw error
+        }
     }
 }

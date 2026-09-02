@@ -76,6 +76,15 @@ Construct your own ``DeviceInfo`` if you need to override any field.
 
 - ``DeviceInfo``
 
+### Observability
+
+- <doc:Analytics>
+- ``FeedbackAnalytics``
+- ``FeedbackEvent``
+- ``FeedbackField``
+- ``AttachmentSource``
+- ``RatingPromptSuppressionReason``
+
 ### Errors
 
 - ``FeedbackSubmissionError``

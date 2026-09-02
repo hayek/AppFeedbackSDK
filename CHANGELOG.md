@@ -13,6 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [0.8.0] - 2026-09-02
+
+### Added
+
+- Optional analytics. Conform to `FeedbackAnalytics` and pass it to
+  `FeedbackClient(analytics:)` to observe the whole funnel: sheet presented, type
+  changed, attachment added or rejected, validation blocked, submission
+  started/succeeded/failed, cancelled, and whether the App Store rating prompt
+  was requested or suppressed (with the reason). `FeedbackEvent` exposes
+  `name`/`parameters` shaped for Firebase and Mixpanel, so forwarding is one
+  line, and those strings are pinned by tests. Configure the sink once on the
+  client — there is deliberately no sheet-level parameter, because a sink set
+  only there would silently never see submission events. Each event has exactly
+  one emitter, so nothing is double-counted. No event carries user content:
+  failures project a stable `error_kind` rather than `localizedDescription`,
+  which would otherwise leak an attachment filename or a relay host name. Passing
+  no sink is a genuine no-op.
+
 ## [0.7.0] - 2026-09-01
 
 ### Added

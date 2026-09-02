@@ -61,7 +61,7 @@ That's it. The transport renders the body, applies labels, calls GitHub, and ret
 
 ## Step 4 — Inject device info (optional)
 
-If you want to override what ``DeviceInfo/current(appName:)`` collects — for example, to distinguish iPad from iPhone or to inject test data — build a ``DeviceInfo`` directly and pass it to the alternate ``FeedbackClient/init(transport:deviceInfo:)`` initializer:
+If you want to override what ``DeviceInfo/current(appName:)`` collects — for example, to distinguish iPad from iPhone or to inject test data — build a ``DeviceInfo`` directly and pass it to the alternate ``FeedbackClient/init(transport:deviceInfo:analytics:)`` initializer:
 
 ```swift
 let device = DeviceInfo(

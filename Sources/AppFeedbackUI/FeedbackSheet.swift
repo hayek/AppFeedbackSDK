@@ -94,10 +94,58 @@ public struct FeedbackSheet: View {
     /// *end* of the dismissal animation, leaving a window in which the task is
     /// still live while the sheet is already sliding away.
     @State private var isDismissing = false
+    /// The rejection last reported, so a repeat of the same one stays quiet but
+    /// a different one is reported. See `shouldReportRejection(previous:current:)`.
+    @State private var reportedRejection: FeedbackAttachmentError?
 
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable { case title, description, email }
+
+    /// The sink is configured once, on the client. There is deliberately no
+    /// sheet-level parameter: an adopter who set one here and not on the client
+    /// would silently never receive submission events — the very question
+    /// analytics is being added to answer — with no compiler help.
+    private var analytics: (any FeedbackAnalytics)? { client.analytics }
+
+    /// Whether a validation rejection is newly worth reporting.
+    ///
+    /// Keyed on the error rather than on `attachmentError`'s presence: that
+    /// string is also set by photo-loading failures, so gating on "no message
+    /// yet" silently swallows a genuine rejection that follows one. It also
+    /// misses a rejection whose *reason* changes while a message is already up —
+    /// remove the oversized file and the next offender is a bad MIME type.
+    ///
+    /// Pure and `static` so the truth table is testable without SwiftUI.
+    static func shouldReportRejection(
+        previous: FeedbackAttachmentError?,
+        current: FeedbackAttachmentError
+    ) -> Bool {
+        previous != current
+    }
+
+    /// The required fields the user left empty, as stable identifiers.
+    ///
+    /// Deliberately not built from `theme.copy`: that text is themable and
+    /// localized, so display names would split one funnel step across every
+    /// locale and every adopter's wording.
+    static func missingFields(title: String, description: String) -> [FeedbackField] {
+        var missing: [FeedbackField] = []
+        if title.isEmpty { missing.append(.title) }
+        if description.isEmpty { missing.append(.description) }
+        return missing
+    }
+
+    /// Whether leaving the sheet counts as a cancellation.
+    ///
+    /// Pure and `static` so the truth table is unit-testable without standing up
+    /// SwiftUI, following the `makeReport` precedent. `isSubmitting` matters: the
+    /// success state only arrives after the transport returns, so a dismissal
+    /// mid-flight would otherwise be reported as a cancellation *and* then as a
+    /// success.
+    static func isCancellation(submitted: Bool, isSubmitting: Bool) -> Bool {
+        !submitted && !isSubmitting
+    }
 
     /// Builds a feedback sheet.
     ///
@@ -173,6 +221,24 @@ public struct FeedbackSheet: View {
                     ))
             }
         }
+        // `.task` is appear-driven, like `.onAppear` — neither re-fires for a
+        // `.sheet` root, which is how this type is meant to be presented. Embed
+        // it in a navigation stack or a tab instead and every re-appearance
+        // counts as a new presentation.
+        .task { analytics?.record(.sheetPresented) }
+        .onDisappear {
+            if Self.isCancellation(
+                submitted: submittedIssueNumber != nil,
+                isSubmitting: isSubmitting
+            ) {
+                analytics?.record(.cancelled)
+            }
+        }
+        // Purely a UX fix, and independent of analytics — `isCancellation`
+        // already declines to report a mid-flight dismissal. Without this, a
+        // swipe during an in-flight submission abandons the sheet while the
+        // request completes underneath, so the user never learns it worked.
+        .interactiveDismissDisabled(isSubmitting)
         #if os(macOS) || os(visionOS)
         .frame(width: 480)
         .frame(minHeight: 480, idealHeight: 660, maxHeight: 660)
@@ -322,6 +388,11 @@ public struct FeedbackSheet: View {
             tagline: s.tagline,
             isSelected: selectedType == type,
             action: {
+                // Re-tapping the selected card is not a selection. The initial
+                // default isn't one either, which is why the submitted type is
+                // carried on `submissionStarted` rather than inferred from here.
+                guard type != selectedType else { return }
+                analytics?.record(.typeSelected(type))
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
                     selectedType = type
                 }
@@ -465,7 +536,7 @@ public struct FeedbackSheet: View {
             allowsMultipleSelection: true
         ) { result in
             if case .success(let urls) = result {
-                ingest(urls: urls)
+                ingest(urls: urls, source: .files)
             }
         }
         #if os(iOS)
@@ -703,16 +774,35 @@ public struct FeedbackSheet: View {
         // animation. Together they keep a system alert off a departing sheet.
         .task {
             #if os(iOS) || os(macOS) || os(visionOS)
-            guard requestsAppStoreReview else { return }
-            await ReviewPromptCoordinator().run(
+            // Dismissal outranks every other reason, so it is checked before the
+            // opt-out — a sheet already leaving was not "disabled".
+            guard !Task.isCancelled else {
+                analytics?.record(.ratingPromptSuppressed(reason: .dismissed))
+                return
+            }
+            guard requestsAppStoreReview else {
+                analytics?.record(.ratingPromptSuppressed(reason: .disabled))
+                return
+            }
+            let outcome = await ReviewPromptCoordinator().run(
                 title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                 description: description.trimmingCharacters(in: .whitespacesAndNewlines),
                 classifier: praiseClassifier,
                 presentReview: {
-                    guard !isDismissing else { return }
+                    guard !isDismissing else { return false }
                     requestReview()
+                    return true
                 }
             )
+            // Recorded here, never inside the coordinator: `record` is
+            // non-throwing, so an adopter's trapping sink would otherwise crash
+            // from within the rating path.
+            switch outcome {
+            case .requested:
+                analytics?.record(.ratingPromptRequested)
+            case .suppressed(let reason):
+                analytics?.record(.ratingPromptSuppressed(reason: reason))
+            }
             #endif
         }
     }
@@ -764,6 +854,12 @@ public struct FeedbackSheet: View {
         let trimmedEmail = contactEmail.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if trimmedTitle.isEmpty || trimmedDescription.isEmpty {
+            // Reported as stable identifiers, not `theme.copy` field names —
+            // that copy is themable and localized, so display names would split
+            // one funnel step across every locale and every adopter's wording.
+            analytics?.record(.validationFailed(
+                missingFields: Self.missingFields(title: trimmedTitle, description: trimmedDescription)
+            ))
             withAnimation { showValidationError = true }
             return
         }
@@ -818,6 +914,7 @@ public struct FeedbackSheet: View {
                     data: png,
                     thumbnail: img
                 ))
+                analytics?.record(.attachmentAdded(source: .paste))
                 revalidate()
             }
         }
@@ -842,14 +939,14 @@ public struct FeedbackSheet: View {
             }
         }
         group.notify(queue: .main) { [collector] in
-            ingest(urls: collector.urls)
+            ingest(urls: collector.urls, source: .drop)
         }
     }
     #endif
 
     // MARK: - Attachment helpers
 
-    private func ingest(urls: [URL]) {
+    private func ingest(urls: [URL], source: AttachmentSource) {
         for url in urls {
             guard pendingAttachments.count < FeedbackAttachmentValidator.maxCount else { break }
             // File-importer URLs are bookmark-based security-scoped URLs, so
@@ -870,6 +967,7 @@ public struct FeedbackSheet: View {
                 data: data,
                 thumbnail: thumb
             ))
+            analytics?.record(.attachmentAdded(source: source))
         }
         revalidate()
     }
@@ -901,6 +999,7 @@ public struct FeedbackSheet: View {
                 data: data,
                 thumbnail: PlatformImage(data: data)
             ))
+            analytics?.record(.attachmentAdded(source: .photoLibrary))
         }
         revalidate()
         // Set after revalidate, which would clear it. A validator complaint about what
@@ -921,7 +1020,14 @@ public struct FeedbackSheet: View {
         do {
             try FeedbackAttachmentValidator.validate(modeled)
             attachmentError = nil
+            reportedRejection = nil
         } catch let err as FeedbackAttachmentError {
+            // A rejected attachment disables Submit, so this is a dead end in
+            // the funnel that would otherwise emit nothing at all.
+            if Self.shouldReportRejection(previous: reportedRejection, current: err) {
+                reportedRejection = err
+                analytics?.record(.attachmentRejected(err))
+            }
             attachmentError = humanMessage(for: err)
         } catch {
             attachmentError = "Attachment error: \(error.localizedDescription)"

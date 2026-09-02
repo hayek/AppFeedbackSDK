@@ -1,3 +1,20 @@
+import AppFeedbackCore
+
+/// What the rating flow ended up doing.
+///
+/// Returned rather than recorded: keeping ``FeedbackAnalytics`` out of this type
+/// means an adopter's `record` — which is non-throwing and could trap — is never
+/// called from inside the rating path, and these decisions stay testable without
+/// an analytics dependency.
+enum ReviewPromptOutcome: Sendable, Equatable {
+
+    /// The system was asked to show the prompt. Whether it did is not observable.
+    case requested
+
+    /// No prompt, for this reason.
+    case suppressed(RatingPromptSuppressionReason)
+}
+
 /// Decides whether — and when — the native App Store rating prompt follows a
 /// successful submission.
 ///
@@ -22,30 +39,48 @@ struct ReviewPromptCoordinator {
     var classificationDeadline: Duration = .seconds(5)
 
     /// - Parameters:
-    ///   - classifier: `nil` when Apple Intelligence is unavailable, which
+    ///   - classifier: `nil` when Apple Intelligence is unreachable, which
     ///     returns immediately and reproduces the pre-feature behavior exactly.
-    ///   - presentReview: Invoked at most once, on the main actor. It may
-    ///     decline to do anything — see the dismissal check at its call site.
+    ///   - presentReview: Invoked at most once, on the main actor. Returns
+    ///     `false` if it declined — the sheet is already dismissing — which is
+    ///     reported as ``RatingPromptSuppressionReason/dismissed`` rather than a
+    ///     prompt that never appeared.
     func run(
         title: String,
         description: String,
         classifier: (any PraiseClassifying)?,
-        presentReview: () -> Void
-    ) async {
-        guard let classifier else { return }
+        presentReview: () -> Bool
+    ) async -> ReviewPromptOutcome {
+        // Dismissal is terminal and outranks every other reason, including the
+        // absence of a classifier.
+        guard !Task.isCancelled else { return .suppressed(.dismissed) }
+        guard let classifier else { return .suppressed(.appleIntelligenceUnavailable) }
 
         // The delay and the classification overlap, so the model's latency is
         // usually free — the prompt lands as soon as the slower of the two ends.
         async let settled: Void = Self.sleep(for: minimumDelay)
-        let isPraise = await verdict(title: title, description: description, from: classifier)
+        let outcome = await verdict(title: title, description: description, from: classifier)
         await settled
 
-        guard isPraise, !Task.isCancelled else { return }
-        presentReview()
+        // Dismissal is terminal and outranks whatever the model was going to say.
+        guard !Task.isCancelled else { return .suppressed(.dismissed) }
+
+        switch outcome {
+        case .praise:
+            return presentReview() ? .requested : .suppressed(.dismissed)
+        case .notPraise:
+            return .suppressed(.notPraise)
+        case .unavailable:
+            return .suppressed(.appleIntelligenceUnavailable)
+        case .failed:
+            return .suppressed(.classifierFailed)
+        case .timedOut:
+            return .suppressed(.classificationTimedOut)
+        }
     }
 
     /// Races the classifier against ``classificationDeadline``. Whichever
-    /// answers first wins; a timeout answers `false`.
+    /// answers first wins; a timeout answers ``PraiseOutcome/timedOut``.
     ///
     /// Both racers are *unstructured* tasks on purpose. A task group implicitly
     /// awaits every child before it returns, and `cancelAll()` only *requests*
@@ -58,16 +93,16 @@ struct ReviewPromptCoordinator {
         title: String,
         description: String,
         from classifier: any PraiseClassifying
-    ) async -> Bool {
+    ) async -> PraiseOutcome {
         let deadline = classificationDeadline
-        let (answers, send) = AsyncStream<Bool>.makeStream()
+        let (answers, send) = AsyncStream<PraiseOutcome>.makeStream()
 
         let work = Task.detached(priority: .utility) {
-            send.yield(await classifier.isPurePraise(title: title, description: description))
+            send.yield(await classifier.classify(title: title, description: description))
         }
         let timer = Task.detached(priority: .utility) {
             await Self.sleep(for: deadline)
-            send.yield(false)
+            send.yield(.timedOut)
         }
         defer {
             work.cancel()
@@ -75,9 +110,10 @@ struct ReviewPromptCoordinator {
             send.finish()
         }
 
-        // Also yields `nil` — and so `false` — if the caller is cancelled.
+        // Also yields `nil` if the caller is cancelled; `run` maps that to
+        // `.dismissed` via its own `Task.isCancelled` check.
         for await answer in answers { return answer }
-        return false
+        return .timedOut
     }
 
     /// `Task.sleep` throws only on cancellation, which callers detect via

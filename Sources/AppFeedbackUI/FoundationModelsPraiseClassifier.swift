@@ -31,12 +31,13 @@ struct FoundationModelsPraiseClassifier: PraiseClassifying {
         case neutralOrUnclear
     }
 
-    func isPurePraise(title: String, description: String) async -> Bool {
+    func classify(title: String, description: String) async -> PraiseOutcome {
         // Every unavailable reason — ineligible hardware, Apple Intelligence
         // switched off, model still downloading — is treated the same: skip, do
         // not wait, do not retry. That is what makes the no-Apple-Intelligence
-        // path identical to the pre-feature behavior.
-        guard case .available = SystemLanguageModel.default.availability else { return false }
+        // path identical to the pre-feature behavior. They collapse into one
+        // outcome because an adopter's remedy is the same for all three.
+        guard case .available = SystemLanguageModel.default.availability else { return .unavailable }
 
         do {
             let session = LanguageModelSession(instructions: PraisePromptBuilder.instructions)
@@ -50,12 +51,14 @@ struct FoundationModelsPraiseClassifier: PraiseClassifying {
                 // on a device, not across OS updates.
                 options: GenerationOptions(sampling: .greedy)
             )
-            return response.content == .purePraise
+            return response.content == .purePraise ? .praise : .notPraise
         } catch {
             // Guardrail trips, refusals, rate limiting, context overflow, and
             // `unsupportedLanguageOrLocale` for text the on-device model does
-            // not handle all land here. Staying quiet is always the safe answer.
-            return false
+            // not handle all land here. Staying quiet is always the safe answer —
+            // but reported as `.failed`, so it is distinguishable from the model
+            // deliberately answering "not praise".
+            return .failed
         }
     }
 }

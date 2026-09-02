@@ -113,7 +113,7 @@ final class RecordingTransport: FeedbackTransport, @unchecked Sendable {
 }
 ```
 
-Pass it to ``FeedbackClient/init(transport:deviceInfo:)`` with a fixed ``DeviceInfo`` for fully deterministic tests.
+Pass it to ``FeedbackClient/init(transport:deviceInfo:analytics:)`` with a fixed ``DeviceInfo`` for fully deterministic tests.
 
 ## Error contract
 

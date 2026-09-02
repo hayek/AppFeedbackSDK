@@ -38,6 +38,7 @@ The default theme uses red for bug reports, blue/purple for feature requests, an
 - **Success animation** — animated checkmark + the GitHub issue number, then dismiss via "Done".
 - **Keyboard shortcuts** — ⌘↩ submits on macOS / iPadOS, default action key dismisses on success.
 - **App Store rating prompt** — praise converts into a rating without leaving the app. See below.
+- **Analytics** — the whole funnel, from sheet opened to rating prompt, through one optional sink. Configure it on the client via `FeedbackClient(analytics:)`; see the Analytics article in `AppFeedbackCore`.
 
 ### App Store rating prompt
 

@@ -26,7 +26,8 @@ let feedback = FeedbackClient(
         owner: "hayek",
         repo: "FeedbackRepo",
         token: myStoredGitHubToken   // load from the Keychain — see "Secrets" below
-    )
+    ),
+    analytics: MyAnalytics()         // optional — see "Analytics" below
 )
 
 // 2. Present the sheet from any SwiftUI view.
@@ -45,6 +46,33 @@ let feedback = FeedbackClient(
 ```
 
 The sheet renders a hero header, bug/feature selector, validated form, success animation, and `Done` dismissal. All copy and accent colors come from `theme`.
+
+### Analytics
+
+`onSubmit` / `onError` tell you about a completed submission. They don't tell you
+how many people opened the sheet and left, got blocked by validation, or were
+asked to rate. Conform to `FeedbackAnalytics` for the whole funnel:
+
+```swift
+struct MyAnalytics: FeedbackAnalytics {
+    func record(_ event: FeedbackEvent) {
+        Analytics.logEvent(event.name, parameters: event.parameters)
+    }
+}
+```
+
+`name` and `parameters` are the stable, vendor-shaped contract
+(`feedback_submission_succeeded`, `["type": "bug", "issue_number": "123"]`), so
+forwarding is one line. Configure the sink **once, on the client** — the sheet
+reads it from there, so a single object receives both the submission lifecycle
+and the UI funnel.
+
+Events never carry user content: no titles, descriptions, email addresses,
+attachment filenames, or bytes. `onSubmit` / `onError` / `onSubmitReport` are not
+deprecated and still fire alongside events.
+
+New cases arrive in minor releases, so forward `name`/`parameters` or always
+write a `default:` — see the DocC article for the full vocabulary.
 
 ### App Store rating prompt
 
@@ -182,7 +210,7 @@ If your app currently has its own `FeedbackService` + `FeedbackFormView` (like C
 1. Add the package per the section above.
 2. Delete `FeedbackService.swift`, `FeedbackModels.swift`, `DeviceInfo.swift` — `FeedbackClient`, `FeedbackType`, and `DeviceInfo.current()` replace them.
 3. Delete `FeedbackFormView.swift` — `FeedbackSheet` replaces it. Map your existing localized strings into `FeedbackTheme.Copy`; map your existing accent colors into `bugAccent` / `featureAccent`.
-4. Wherever you presented the form, present `FeedbackSheet(client: …)` instead. Move analytics calls from inside the form into the `onSubmit` / `onError` callbacks.
+4. Wherever you presented the form, present `FeedbackSheet(client: …)` instead. Move analytics calls from inside the form into a `FeedbackAnalytics` conformance passed to `FeedbackClient(analytics:)` — that covers the whole funnel, not just completed submissions. `onSubmit` / `onError` remain available for app-side control flow.
 
 The body produced by the SDK is byte-for-byte the same shape as the legacy `FeedbackService.generateIssueBody` output, so existing inbox tooling and parsed issues are unaffected.
 
