@@ -13,7 +13,7 @@ jobs:
     name: swift test (conformance gate)
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable
@@ -28,7 +28,7 @@ jobs:
     name: fixtures match appfeedback-spec
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The conformance gate only means something if the vendored golden fixtures
       # still match the canonical ones in appfeedback-spec. Fail loudly on drift.
       - name: Diff vendored fixtures against the canonical spec
